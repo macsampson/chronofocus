@@ -52,6 +52,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       "instagram.com",
       "facebook.com",
       "netflix.com",
+      "twitch.tv",
+      "tiktok.com",
     ]
   } else {
     newStorage.blockedSites = currentData.blockedSites // Preserve existing blocked sites if user could edit them
@@ -108,7 +110,7 @@ async function endSession(result) {
     clearInterval(sessionTimerInterval)
     sessionTimerInterval = null
   }
-  stopBlockedSiteInterval()
+  stopMonsterTriggerInterval()
 
   const { currentSession, userStats } = await chrome.storage.local.get([
     "currentSession",
@@ -227,7 +229,7 @@ async function onTimerTick() {
     console.warn("Timer tick for inactive/missing session. Clearing interval.")
     clearInterval(sessionTimerInterval)
     sessionTimerInterval = null
-    stopBlockedSiteInterval() // Ensure blocked site interval is also stopped
+    stopMonsterTriggerInterval() // Ensure monster trigger interval is also stopped
     return
   }
 
@@ -278,12 +280,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           clearInterval(sessionTimerInterval)
           sessionTimerInterval = null
         }
-        stopBlockedSiteInterval()
+        stopMonsterTriggerInterval()
         // Clear storage
         await chrome.storage.local.set({
           currentSession: null,
           sessionOutcome: null,
         })
+      }
+
+      // Check if monsters loaded successfully
+      if (Object.keys(MONSTERS_DATA).length === 0) {
+        console.error("Monsters not loaded")
+        sendResponse({
+          status: "error",
+          message: "Error loading monsters. Please reload the extension.",
+        })
+        return
       }
 
       const monster = MONSTERS_DATA[request.monsterId] // Need monster data here
@@ -314,7 +326,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sessionOutcome: null,
       })
       sessionTimerInterval = setInterval(onTimerTick, TICK_INTERVAL_MS)
-      startBlockedSiteInterval() // Start blocked site monitoring
+      startMonsterTriggerInterval() // Start monster trigger monitoring
+
+      // Initialize current tab ID for Tabberwock tracking
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs && tabs[0]) {
+          currentTabId = tabs[0].id
+        }
+      })
+
       console.log(
         "Session started in background. Timer ID:",
         sessionTimerInterval
@@ -361,7 +381,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         clearInterval(sessionTimerInterval)
         sessionTimerInterval = null
       }
-      stopBlockedSiteInterval()
+      stopMonsterTriggerInterval()
 
       await chrome.storage.local.set({
         currentSession: null,
@@ -375,100 +395,163 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 })
 
 // --- Tab & Site Monitoring ---
-// Remove grace period and flat penalty logic
-let blockedSiteInterval = null // Interval for checking blocked site every second
+let monsterTriggerInterval = null // Interval for checking monster-specific triggers
+let currentTabId = null // Track current tab for Tabberwock
 
-async function checkBlockedSiteAndApplyPenalty() {
+async function checkMonsterTriggersAndApplyHealing() {
   // Get the currently active tab in the current window
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     if (!tabs || tabs.length === 0) return
     const tab = tabs[0]
     const url = tab.url
-    const { currentSession, blockedSites } = await chrome.storage.local.get([
+    const { currentSession } = await chrome.storage.local.get([
       "currentSession",
-      "blockedSites",
     ])
     if (!currentSession || !currentSession.isActive) return
     if (!url) return
-    const isBlocked = blockedSites.some((blockedDomain) => {
+
+    // Get current monster data
+    const currentMonster = MONSTERS_DATA[currentSession.monsterId]
+    if (!currentMonster) return
+
+    let shouldHeal = false
+    let triggerReason = ""
+
+    // Check if current site matches monster's trigger sites
+    if (currentMonster.triggerSites && currentMonster.triggerSites.length > 0) {
       try {
-        const hostname = new URL(url).hostname
-        return hostname.includes(blockedDomain)
-      } catch (e) {
-        return false
-      }
-    })
-    if (isBlocked) {
-      // Monster gains 1 HP per second spent on blocked site
-      if (currentSession.currentHP < currentSession.maxHP) {
-        currentSession.currentHP = Math.min(
-          currentSession.maxHP,
-          currentSession.currentHP + 1
+        const hostname = new URL(url).hostname.toLowerCase()
+        const matchedSite = currentMonster.triggerSites.find((site) =>
+          hostname.includes(site.toLowerCase())
         )
-        if (!currentSession.battleLog) currentSession.battleLog = []
-        // Check if the last log entry is a distraction entry
-        const lastEntry =
-          currentSession.battleLog[currentSession.battleLog.length - 1]
-        const distractionRegex = /^Distracted! Monster \+(\d+) HP\.$/
-        if (lastEntry && distractionRegex.test(lastEntry)) {
-          // Increment the HP count in the last entry
-          const match = lastEntry.match(distractionRegex)
-          const newCount = parseInt(match[1], 10) + 1
-          currentSession.battleLog[
-            currentSession.battleLog.length - 1
-          ] = `Distracted! Monster +${newCount} HP.`
-        } else {
-          // Start a new distraction entry
-          currentSession.battleLog.push("Distracted! Monster +1 HP.")
+        if (matchedSite) {
+          shouldHeal = true
+          triggerReason = `${currentMonster.name} feeds on ${matchedSite}!`
         }
-        await chrome.storage.local.set({ currentSession })
-        updatePopup()
+      } catch (e) {
+        console.warn("Failed to parse URL:", url, e)
       }
+    }
+
+    // Apply healing if triggered
+    if (shouldHeal && currentSession.currentHP < currentSession.maxHP) {
+      currentSession.currentHP = Math.min(
+        currentSession.maxHP,
+        currentSession.currentHP + 1
+      )
+      if (!currentSession.battleLog) currentSession.battleLog = []
+
+      // Check if the last log entry is a healing entry with the same reason
+      const lastEntry =
+        currentSession.battleLog[currentSession.battleLog.length - 1]
+      const healingRegex = new RegExp(
+        `^${triggerReason.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )} \\+(\\d+) HP\\.$`
+      )
+
+      if (lastEntry && healingRegex.test(lastEntry)) {
+        // Increment the HP count in the last entry
+        const match = lastEntry.match(healingRegex)
+        const newCount = parseInt(match[1], 10) + 1
+        currentSession.battleLog[
+          currentSession.battleLog.length - 1
+        ] = `${triggerReason} +${newCount} HP.`
+      } else {
+        // Start a new healing entry
+        currentSession.battleLog.push(`${triggerReason} +1 HP.`)
+      }
+
+      await chrome.storage.local.set({ currentSession })
+      updatePopup()
     }
   })
 }
 
-function startBlockedSiteInterval() {
-  if (blockedSiteInterval) clearInterval(blockedSiteInterval)
-  blockedSiteInterval = setInterval(checkBlockedSiteAndApplyPenalty, 1000)
+// Tab switching detection for Tabberwock
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  const { currentSession } = await chrome.storage.local.get(["currentSession"])
+  if (!currentSession || !currentSession.isActive) return
+
+  const currentMonster = MONSTERS_DATA[currentSession.monsterId]
+  if (!currentMonster || currentMonster.triggerEvent !== "tab_switch") return
+
+  // Only trigger if this is actually a tab switch (not initial load)
+  if (currentTabId !== null && currentTabId !== activeInfo.tabId) {
+    if (currentSession.currentHP < currentSession.maxHP) {
+      currentSession.currentHP = Math.min(
+        currentSession.maxHP,
+        currentSession.currentHP + 2 // Tab switching gives more HP since it's more disruptive
+      )
+      if (!currentSession.battleLog) currentSession.battleLog = []
+
+      const triggerReason = "Tabberwock feeds on tab switching!"
+      const lastEntry =
+        currentSession.battleLog[currentSession.battleLog.length - 1]
+      const healingRegex = /^Tabberwock feeds on tab switching! \+(\d+) HP\.$/
+
+      if (lastEntry && healingRegex.test(lastEntry)) {
+        const match = lastEntry.match(healingRegex)
+        const newCount = parseInt(match[1], 10) + 2
+        currentSession.battleLog[
+          currentSession.battleLog.length - 1
+        ] = `${triggerReason} +${newCount} HP.`
+      } else {
+        currentSession.battleLog.push(`${triggerReason} +2 HP.`)
+      }
+
+      await chrome.storage.local.set({ currentSession })
+      updatePopup()
+    }
+  }
+
+  currentTabId = activeInfo.tabId
+})
+
+function startMonsterTriggerInterval() {
+  if (monsterTriggerInterval) clearInterval(monsterTriggerInterval)
+  monsterTriggerInterval = setInterval(
+    checkMonsterTriggersAndApplyHealing,
+    1000
+  )
+  console.log("Started monster trigger monitoring interval")
 }
 
-function stopBlockedSiteInterval() {
-  if (blockedSiteInterval) {
-    clearInterval(blockedSiteInterval)
-    blockedSiteInterval = null
+function stopMonsterTriggerInterval() {
+  if (monsterTriggerInterval) {
+    clearInterval(monsterTriggerInterval)
+    monsterTriggerInterval = null
+    currentTabId = null // Reset tab tracking
+    console.log("Stopped monster trigger monitoring interval")
   }
 }
 
-// Note: Blocked site interval management is now handled in the main message listener above
+// Note: Monster trigger interval management is now handled in the main message listener above
 
-// To make MONSTERS_DATA available in background script without duplicating:
-const MONSTERS_DATA = {
-  // Each monster has a different HP, representing different session lengths/difficulties
-  scrollfiend: {
-    id: "scrollfiend",
-    name: "Scrollfiend",
-    icon: "assets/scrollfiend.png",
-    hp: 1000,
-  }, // ~17 min
-  tubewyrm: {
-    id: "tubewyrm",
-    name: "Tubewyrm",
-    icon: "assets/tubewyrm.png",
-    hp: 1500,
-  }, // 25 min
-  tabberwock: {
-    id: "tabberwock",
-    name: "Tabberwock",
-    icon: "assets/tabberwock.png",
-    hp: 2000,
-  }, // ~33 min
+// Load monsters from JSON file - single source of truth
+let MONSTERS_DATA = {}
+
+async function loadMonsters() {
+  try {
+    const response = await fetch(chrome.runtime.getURL("monsters.json"))
+    MONSTERS_DATA = await response.json()
+    console.log("Monsters loaded in background:", MONSTERS_DATA)
+  } catch (error) {
+    console.error("Error loading monsters in background:", error)
+    // No fallback - just empty object
+    MONSTERS_DATA = {}
+  }
 }
 
 // --- Startup check for existing session ---
 // This is important if the background script was terminated and restarted.
 ;(async () => {
   console.log("Background script starting up / re-initializing.")
+
+  // Load monsters first
+  await loadMonsters()
+
   const { currentSession } = await chrome.storage.local.get("currentSession")
   if (currentSession && currentSession.isActive) {
     console.log("Found active session on startup:", currentSession)

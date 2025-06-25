@@ -1,37 +1,33 @@
 // --- Constants and Data ---
-const MONSTERS = {
-  scrollfiend: {
-    id: "scrollfiend",
-    name: "Scrollfiend",
-    icon: "assets/scrollfiend.png",
-    description: "Represents endless scrolling on social media.",
-    hp: 100,
-  },
-  tubewyrm: {
-    id: "tubewyrm",
-    name: "Tubewyrm",
-    icon: "assets/tubewyrm.png",
-    description: "Symbolizes video binges and streaming traps.",
-    hp: 100,
-  },
-  tabberwock: {
-    id: "tabberwock",
-    name: "Tabberwock",
-    icon: "assets/tabberwock.png",
-    description: "The beast of excessive tab-hopping and context switching.",
-    hp: 100,
-  },
+let MONSTERS = {}
+
+// Load monsters from JSON file
+async function loadMonsters() {
+  try {
+    const response = await fetch("./monsters.json")
+    MONSTERS = await response.json()
+    console.log("Monsters loaded:", MONSTERS)
+  } catch (error) {
+    console.error("Error loading monsters:", error)
+    // No fallback - just empty object to trigger error display
+    MONSTERS = {}
+  }
 }
 
 const SCREENS = {
-  monsterSelection: document.getElementById("monster-selection-screen"),
+  hubTown: document.getElementById("hub-town-screen"),
   battle: document.getElementById("battle-screen"),
   result: document.getElementById("result-screen"),
 }
 
+// XP and Level Constants
+const XP_PER_LEVEL = 500
+const XP_PER_POMODORO = 50
+
 // --- State ---
 let selectedMonsterId = null
-let currentSession = null // Stores { monsterId, startTime, monsterHP, timerValue }
+let currentSession = null
+let userStats = null
 
 // Track last monster HP for attack animation
 let lastMonsterHP = null
@@ -44,19 +40,123 @@ const startAnotherSessionBtn = document.getElementById(
   "start-another-session-btn"
 )
 
+// Hub Town Elements
+const usernameElement = document.getElementById("username")
+const userAvatarElement = document.getElementById("user-avatar")
+const xpBarElement = document.getElementById("xp-bar")
+const xpTextElement = document.getElementById("xp-text")
+const levelBadgeElement = document.getElementById("level-badge")
+const totalPomodorosElement = document.getElementById("total-pomodoros")
+const currentStreakElement = document.getElementById("current-streak")
+const todayPomodorosElement = document.getElementById("today-pomodoros")
+const mostDefeatedMonsterElement = document.getElementById(
+  "most-defeated-monster"
+)
+const streakIndicatorsElement = document.getElementById("streak-indicators")
+
+// Battle Elements
 const timerDisplay = document.getElementById("timer-display")
 const monsterHpBar = document.getElementById("monster-hp-bar")
 const battleMonsterName = document.getElementById("battle-monster-name")
 const battleMonsterIcon = document.getElementById("battle-monster-icon")
 const battleLogContent = document.getElementById("battle-log-content")
 
+// Result Elements
 const resultMessage = document.getElementById("result-message")
 const xpEarnedDisplay = document.getElementById("xp-earned-display")
 const statsDisplayContent = document.getElementById("stats-display-content")
 
+// Modal Elements
 const endSessionModal = document.getElementById("end-session-modal")
 const cancelEndSessionBtn = document.getElementById("cancel-end-session-btn")
 const confirmEndSessionBtn = document.getElementById("confirm-end-session-btn")
+
+// --- Helper Functions ---
+
+function calculateLevel(totalXP) {
+  return Math.floor(totalXP / XP_PER_LEVEL) + 1
+}
+
+function calculateXPForCurrentLevel(totalXP) {
+  return totalXP % XP_PER_LEVEL
+}
+
+function calculateXPForNextLevel() {
+  return XP_PER_LEVEL
+}
+
+function generateUsername() {
+  const adjectives = [
+    "Focused",
+    "Determined",
+    "Mighty",
+    "Swift",
+    "Brave",
+    "Wise",
+    "Noble",
+  ]
+  const nouns = [
+    "Warrior",
+    "Guardian",
+    "Champion",
+    "Hero",
+    "Knight",
+    "Defender",
+    "Master",
+  ]
+  return `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${
+    nouns[Math.floor(Math.random() * nouns.length)]
+  }`
+}
+
+function getMostDefeatedMonster(monstersDefeated) {
+  if (!monstersDefeated) return "None"
+
+  let maxDefeated = 0
+  let mostDefeated = "None"
+
+  Object.entries(monstersDefeated).forEach(([monsterId, count]) => {
+    if (count > maxDefeated) {
+      maxDefeated = count
+      mostDefeated = MONSTERS[monsterId]?.name || monsterId
+    }
+  })
+
+  return mostDefeated
+}
+
+function getTodayPomodoros() {
+  const today = new Date().toDateString()
+  const todayPomodoros = parseInt(
+    localStorage.getItem(`pomodoros_${today}`) || "0",
+    10
+  )
+  return todayPomodoros
+}
+
+function updateTodayPomodoros() {
+  const today = new Date().toDateString()
+  const currentCount = getTodayPomodoros()
+  localStorage.setItem(`pomodoros_${today}`, currentCount + 1)
+}
+
+function getRecentSessionHistory() {
+  // Get last 5 sessions from localStorage
+  const history = JSON.parse(localStorage.getItem("sessionHistory") || "[]")
+  return history.slice(-5).reverse()
+}
+
+function addToSessionHistory(success) {
+  const history = JSON.parse(localStorage.getItem("sessionHistory") || "[]")
+  history.push({ date: Date.now(), success })
+
+  // Keep only last 20 sessions
+  if (history.length > 20) {
+    history.splice(0, history.length - 20)
+  }
+
+  localStorage.setItem("sessionHistory", JSON.stringify(history))
+}
 
 // --- Functions ---
 
@@ -69,23 +169,144 @@ function switchScreen(screenName) {
   }
 }
 
-function renderMonsterSelectionScreen() {
-  monsterCardsContainer.innerHTML = "" // Clear previous cards
-  Object.values(MONSTERS).forEach((monster) => {
-    const card = document.createElement("div")
-    card.classList.add("monster-card")
-    card.dataset.monsterId = monster.id
-    card.innerHTML = `
-      <img src="${monster.icon}" alt="${monster.name}" class="monster-icon">
-      <div class="monster-details">
-        <strong>${monster.name}</strong>
-        <p>${monster.description}</p>
+async function loadUserStats() {
+  try {
+    const data = await chrome.storage.local.get(["userStats"])
+    userStats = data.userStats || {
+      monstersDefeated: { scrollfiend: 0, tubewyrm: 0, tabberwock: 0 },
+      totalPomodoros: 0,
+      currentXP: 0,
+      currentStreak: 0,
+    }
+    return userStats
+  } catch (error) {
+    console.error("Error loading user stats:", error)
+    return {
+      monstersDefeated: { scrollfiend: 0, tubewyrm: 0, tabberwock: 0 },
+      totalPomodoros: 0,
+      currentXP: 0,
+      currentStreak: 0,
+    }
+  }
+}
+
+function updateHubTownDisplay(stats) {
+  // Update username (generate if not stored)
+  let username = localStorage.getItem("username")
+  if (!username) {
+    username = generateUsername()
+    localStorage.setItem("username", username)
+  }
+  usernameElement.textContent = username
+
+  // Update level and XP
+  const currentLevel = calculateLevel(stats.currentXP)
+  const currentLevelXP = calculateXPForCurrentLevel(stats.currentXP)
+  const nextLevelXP = calculateXPForNextLevel()
+
+  levelBadgeElement.textContent = `Level ${currentLevel}`
+  xpTextElement.textContent = `${currentLevelXP} / ${nextLevelXP} XP`
+
+  // Animate XP bar
+  const xpPercentage = (currentLevelXP / nextLevelXP) * 100
+  setTimeout(() => {
+    xpBarElement.style.width = `${xpPercentage}%`
+  }, 100)
+
+  // Update stats
+  totalPomodorosElement.textContent = stats.totalPomodoros
+  currentStreakElement.innerHTML =
+    stats.currentStreak > 0 ? `🔥 ${stats.currentStreak}` : `💤 0`
+
+  // Update today's stats
+  const todayPomodoros = getTodayPomodoros()
+  todayPomodorosElement.textContent = todayPomodoros
+
+  // Update most defeated monster
+  const mostDefeated = getMostDefeatedMonster(stats.monstersDefeated)
+  mostDefeatedMonsterElement.textContent = mostDefeated
+
+  // Update session history
+  const history = getRecentSessionHistory()
+  streakIndicatorsElement.innerHTML = ""
+
+  if (history.length === 0) {
+    // Default placeholder if no history
+    for (let i = 0; i < 5; i++) {
+      const indicator = document.createElement("span")
+      indicator.className = "session-indicator"
+      indicator.textContent = "⚪"
+      streakIndicatorsElement.appendChild(indicator)
+    }
+  } else {
+    // Fill remaining slots with placeholders
+    const remaining = 5 - history.length
+    for (let i = 0; i < remaining; i++) {
+      const indicator = document.createElement("span")
+      indicator.className = "session-indicator"
+      indicator.textContent = "⚪"
+      streakIndicatorsElement.appendChild(indicator)
+    }
+
+    // Add actual history
+    history.forEach((session) => {
+      const indicator = document.createElement("span")
+      indicator.className = `session-indicator ${
+        session.success ? "success" : "fail"
+      }`
+      indicator.textContent = session.success ? "✅" : "❌"
+      streakIndicatorsElement.appendChild(indicator)
+    })
+  }
+}
+
+async function renderHubTownScreen() {
+  // Ensure monsters are loaded before rendering
+  if (Object.keys(MONSTERS).length === 0) {
+    await loadMonsters()
+  }
+
+  const stats = await loadUserStats()
+  updateHubTownDisplay(stats)
+
+  monsterCardsContainer.innerHTML = ""
+
+  // Check if monsters loaded successfully
+  if (Object.keys(MONSTERS).length === 0) {
+    // Display error message
+    const errorCard = document.createElement("div")
+    errorCard.classList.add("monster-card")
+    errorCard.style.textAlign = "center"
+    errorCard.style.color = "#e74c3c"
+    errorCard.style.border = "2px solid #e74c3c"
+    errorCard.innerHTML = `
+      <div class="monster-details" style="text-align: center;">
+        <strong>❌ Error Loading Monsters</strong>
+        <p>Could not load monster data. Please check the monsters.json file.</p>
       </div>
     `
-    card.addEventListener("click", () => selectMonster(monster.id, card))
-    monsterCardsContainer.appendChild(card)
-  })
-  switchScreen("monsterSelection")
+    monsterCardsContainer.appendChild(errorCard)
+    startSessionBtn.disabled = true
+  } else {
+    // Render monsters normally
+    Object.values(MONSTERS).forEach((monster) => {
+      const card = document.createElement("div")
+      card.classList.add("monster-card")
+      card.dataset.monsterId = monster.id
+      card.innerHTML = `
+        <img src="${monster.icon}" alt="${monster.name}" class="monster-icon">
+        <div class="monster-details">
+          <strong>${monster.name}</strong>
+          <p>${monster.description}</p>
+          <small style="color: #888; margin-top: 4px; display: block;">HP: ${monster.hp}</small>
+        </div>
+      `
+      card.addEventListener("click", () => selectMonster(monster.id, card))
+      monsterCardsContainer.appendChild(card)
+    })
+  }
+
+  switchScreen("hubTown")
 }
 
 function selectMonster(monsterId, cardElement) {
@@ -110,35 +331,32 @@ async function handleStartSession() {
     const response = await chrome.runtime.sendMessage({
       action: "startSession",
       monsterId: selectedMonsterId,
-      monsterHP: monster.hp, // Initial HP
+      monsterHP: monster.hp,
       sessionDuration: 25 * 60, // 25 minutes in seconds
     })
     console.log("Background response to startSession:", response)
     if (response && response.status === "sessionStarted") {
       currentSession = {
-        // Store initial session state locally for UI
         monsterId: selectedMonsterId,
         monsterName: monster.name,
         monsterIcon: monster.icon,
         currentHP: monster.hp,
         maxHP: monster.hp,
-        timerValue: 25 * 60, // in seconds
+        timerValue: 25 * 60,
         battleLog: ["Session started! Focus!"],
       }
       renderBattleScreen(currentSession)
     } else {
       console.error("Failed to start session via background script:", response)
-      // Show error to user?
     }
   } catch (error) {
     console.error("Error sending startSession message:", error)
-    // Handle cases where background script might not be ready or an error occurs
     if (
       error.message.includes("Could not establish connection") ||
       error.message.includes("Receiving end does not exist")
     ) {
       alert(
-        "FocusForge background service is not ready. Please try again in a moment, or ensure the extension is enabled correctly."
+        "ChronoFocus background service is not ready. Please try again in a moment, or ensure the extension is enabled correctly."
       )
     }
   }
@@ -148,8 +366,7 @@ function renderBattleScreen(sessionData) {
   console.log("Rendering battle screen with data:", sessionData)
   if (!sessionData || !MONSTERS[sessionData.monsterId]) {
     console.error("Invalid session data for battle screen:", sessionData)
-    // Potentially switch back to monster selection or show an error
-    renderMonsterSelectionScreen() // Fallback
+    renderHubTownScreen()
     alert("Error: Could not load session data. Please try again.")
     return
   }
@@ -157,10 +374,10 @@ function renderBattleScreen(sessionData) {
   battleMonsterName.textContent = `Battling ${monster.name}`
   battleMonsterIcon.src = monster.icon
 
-  // --- Attack Animation Logic ---
+  // Attack Animation Logic
   if (lastMonsterHP !== null && sessionData.currentHP < lastMonsterHP) {
-    battleMonsterIcon.classList.remove("monster-attack-anim") // reset if needed
-    void battleMonsterIcon.offsetWidth // force reflow
+    battleMonsterIcon.classList.remove("monster-attack-anim")
+    void battleMonsterIcon.offsetWidth
     battleMonsterIcon.classList.add("monster-attack-anim")
     battleMonsterIcon.addEventListener(
       "animationend",
@@ -193,14 +410,14 @@ function updateTimerDisplay(seconds) {
 }
 
 function updateBattleLog(logEntries) {
-  battleLogContent.innerHTML = "" // Clear existing log
+  battleLogContent.innerHTML = ""
   if (Array.isArray(logEntries)) {
     logEntries.forEach((entry) => {
       const p = document.createElement("p")
       p.textContent = entry
       battleLogContent.appendChild(p)
     })
-    battleLogContent.scrollTop = battleLogContent.scrollHeight // Scroll to bottom
+    battleLogContent.scrollTop = battleLogContent.scrollHeight
   }
 }
 
@@ -209,8 +426,17 @@ function renderResultScreen(outcomeData) {
 
   if (!outcomeData) {
     console.error("No outcome data provided to renderResultScreen")
-    renderMonsterSelectionScreen()
+    renderHubTownScreen()
     return
+  }
+
+  // Update session history
+  const success = outcomeData.result === "victory"
+  addToSessionHistory(success)
+
+  // Update today's pomodoros if successful
+  if (success) {
+    updateTodayPomodoros()
   }
 
   // Set result message
@@ -235,48 +461,46 @@ function renderResultScreen(outcomeData) {
     statsHTML += `<p><strong>Total Pomodoros:</strong> ${outcomeData.totalPomodoros}</p>`
   }
   if (outcomeData.currentXP !== undefined) {
-    statsHTML += `<p><strong>Total XP:</strong> ${outcomeData.currentXP}</p>`
+    const level = calculateLevel(outcomeData.currentXP)
+    statsHTML += `<p><strong>Total XP:</strong> ${outcomeData.currentXP} (Level ${level})</p>`
   }
   if (outcomeData.currentStreak !== undefined) {
     statsHTML += `<p><strong>Current Streak:</strong> ${outcomeData.currentStreak}</p>`
   }
 
   statsDisplayContent.innerHTML = statsHTML
-
-  // Ensure buttons are visible
   startAnotherSessionBtn.style.display = "block"
-  startAnotherSessionBtn.textContent = "Start Another Session"
+  startAnotherSessionBtn.textContent = "Return to Hub Town"
 
   switchScreen("result")
 }
 
 // --- Event Handlers ---
 
-// Show confirmation modal when user clicks 'End Session Early'
 endSessionEarlyBtn.addEventListener("click", () => {
   endSessionModal.style.display = "flex"
 })
 
-// Hide modal on cancel
 cancelEndSessionBtn.addEventListener("click", () => {
   endSessionModal.style.display = "none"
 })
 
-// Handle confirm end session
 confirmEndSessionBtn.addEventListener("click", async () => {
   endSessionModal.style.display = "none"
-  // End session as abandoned
   try {
     const response = await chrome.runtime.sendMessage({
       action: "endSessionEarly",
     })
-    // Track abandoned sessions in localStorage
+
+    // Track session as failed
+    addToSessionHistory(false)
+
     let abandoned = parseInt(
       localStorage.getItem("abandonedSessions") || "0",
       10
     )
     localStorage.setItem("abandonedSessions", abandoned + 1)
-    // Optionally track monster and time left
+
     if (currentSession) {
       localStorage.setItem("lastAbandonedMonster", currentSession.monsterId)
       localStorage.setItem("lastAbandonedTimeLeft", currentSession.timerValue)
@@ -289,7 +513,6 @@ confirmEndSessionBtn.addEventListener("click", async () => {
           : "no"
       )
     }
-    // Show custom abandon result
     renderAbandonResultScreen()
   } catch (error) {
     console.error("Error sending endSessionEarly message:", error)
@@ -297,7 +520,6 @@ confirmEndSessionBtn.addEventListener("click", async () => {
 })
 
 function renderAbandonResultScreen() {
-  // Custom abandon result
   const monster = currentSession ? MONSTERS[currentSession.monsterId] : null
   resultMessage.innerHTML = `😔 You fled the battle...`
   xpEarnedDisplay.textContent = `No XP earned.`
@@ -305,38 +527,37 @@ function renderAbandonResultScreen() {
     ? `${monster.name} devours your focus and lives to distract you another day.`
     : "The monster lives to distract you another day."
   statsDisplayContent.innerHTML = `<p>${monsterMsg}</p>`
-  // Show both options
-  startAnotherSessionBtn.textContent = "Start New Session"
+
+  startAnotherSessionBtn.textContent = "Return to Hub Town"
   startAnotherSessionBtn.style.display = "block"
-  // Add a Return to Monster Select button if not present
+
   let returnBtn = document.getElementById("return-to-select-btn")
   if (!returnBtn) {
     returnBtn = document.createElement("button")
     returnBtn.id = "return-to-select-btn"
-    returnBtn.textContent = "Return to Monster Select"
-    returnBtn.onclick = () => renderMonsterSelectionScreen()
+    returnBtn.textContent = "Try Again"
+    returnBtn.onclick = () => renderHubTownScreen()
     statsDisplayContent.appendChild(returnBtn)
   }
   switchScreen("result")
 }
 
 function handleStartAnotherSession() {
-  // Force cleanup of any stuck session state
   chrome.runtime.sendMessage({ action: "forceCleanup" }, (response) => {
     console.log("Force cleanup response:", response)
   })
 
   chrome.storage.local.remove(["currentSession", "sessionOutcome"], () => {
-    console.log("Cleared session data, returning to monster selection.")
+    console.log("Cleared session data, returning to hub town.")
     selectedMonsterId = null
-    currentSession = null // Clear local session cache
-    lastMonsterHP = null // Reset animation tracking
-    startSessionBtn.disabled = true // Ensure it's disabled before selection
-    // Clear other UI elements that might persist visually
+    currentSession = null
+    lastMonsterHP = null
+    startSessionBtn.disabled = true
+
     monsterCardsContainer
       .querySelectorAll(".monster-card")
       .forEach((card) => card.classList.remove("selected"))
-    renderMonsterSelectionScreen()
+    renderHubTownScreen()
   })
 }
 
@@ -349,22 +570,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log("Popup received message:", message)
   if (message.action === "updatePopupBattleState") {
     if (SCREENS.battle.classList.contains("active")) {
-      // Only update if battle screen is visible
-      currentSession = message.sessionData // Update local cache of session
+      currentSession = message.sessionData
       renderBattleScreen(message.sessionData)
     }
   } else if (message.action === "sessionEnded") {
-    // Background has determined the session outcome
     renderResultScreen(message.outcomeData)
   }
-  return true // Keep the message channel open for asynchronous response if needed
+  return true
 })
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", async () => {
-  // Check current state from chrome.storage.local to determine which screen to show
+  // Load monsters first
+  await loadMonsters()
+
   try {
-    // First, get the current popup state from background
     const backgroundResponse = await chrome.runtime.sendMessage({
       action: "getPopupState",
     })
@@ -376,12 +596,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       currentSession = backgroundResponse.sessionData
       renderBattleScreen(currentSession)
     } else {
-      // No active session or outcome, show monster selection
-      renderMonsterSelectionScreen()
+      renderHubTownScreen()
     }
   } catch (error) {
     console.error("Error getting popup state from background:", error)
-    // Fallback: check storage directly
     try {
       const data = await chrome.storage.local.get([
         "currentSession",
@@ -395,13 +613,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentSession = data.currentSession
         renderBattleScreen(currentSession)
       } else {
-        renderMonsterSelectionScreen()
+        renderHubTownScreen()
       }
     } catch (storageError) {
       console.error("Error accessing storage:", storageError)
-      renderMonsterSelectionScreen()
+      renderHubTownScreen()
     }
   }
 })
 
-console.log("Popup script fully loaded and initialized.")
+console.log("ChronoFocus popup script fully loaded and initialized.")

@@ -1,0 +1,50 @@
+{
+  "scrollfiend": {
+    "id": "scrollfiend",
+    "name": "Scrollfiend",
+    "icon": "assets/scrollfiend.png",
+    "description": "Feeds on social media browsing. Heals when you visit Facebook, Instagram, X, TikTok, and other social media sites.",
+    "hp": 1500,
+    "triggerSites": [
+      "facebook.com",
+      "instagram.com",
+      "twitter.com",
+      "x.com",
+      "tiktok.com",
+      "snapchat.com",
+      "linkedin.com",
+      "reddit.com",
+      "pinterest.com",
+      "tumblr.com"
+    ]
+  },
+  "tubewyrm": {
+    "id": "tubewyrm",
+    "name": "Tubewyrm",
+    "icon": "assets/tubewyrm.png",
+    "description": "Thrives on video content. Heals when you visit YouTube, Twitch, Netflix, and other streaming sites.",
+    "hp": 1200,
+    "triggerSites": [
+      "youtube.com",
+      "twitch.tv",
+      "kick.com",
+      "netflix.com",
+      "hulu.com",
+      "disney.com",
+      "amazon.com",
+      "hbo.com",
+      "vimeo.com",
+      "dailymotion.com",
+      "crunchyroll.com"
+    ]
+  },
+  "tabberwock": {
+    "id": "tabberwock",
+    "name": "Tabberwock",
+    "icon": "assets/tabberwock.png",
+    "description": "Masters chaos through tab switching. Heals whenever you switch between tabs.",
+    "hp": 1800,
+    "triggerSites": [],
+    "triggerEvent": "tab_switch"
+  }
+}
