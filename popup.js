@@ -293,12 +293,17 @@ async function renderHubTownScreen() {
       const card = document.createElement("div")
       card.classList.add("monster-card")
       card.dataset.monsterId = monster.id
+
+      // Calculate duration in minutes for display
+      const durationMinutes = Math.round(monster.hp / 60)
+
       card.innerHTML = `
         <img src="${monster.icon}" alt="${monster.name}" class="monster-icon">
         <div class="monster-details">
           <strong>${monster.name}</strong>
           <p>${monster.description}</p>
           <small style="color: #888; margin-top: 4px; display: block;">HP: ${monster.hp}</small>
+          <small style="color: #888; margin-top: 4px; display: block;">Duration: ${durationMinutes} min</small>
         </div>
       `
       card.addEventListener("click", () => selectMonster(monster.id, card))
@@ -332,7 +337,7 @@ async function handleStartSession() {
       action: "startSession",
       monsterId: selectedMonsterId,
       monsterHP: monster.hp,
-      sessionDuration: 25 * 60, // 25 minutes in seconds
+      sessionDuration: monster.hp, // Duration in seconds = monster HP
     })
     console.log("Background response to startSession:", response)
     if (response && response.status === "sessionStarted") {
@@ -342,7 +347,7 @@ async function handleStartSession() {
         monsterIcon: monster.icon,
         currentHP: monster.hp,
         maxHP: monster.hp,
-        timerValue: 25 * 60,
+        timerValue: monster.hp,
         battleLog: ["Session started! Focus!"],
       }
       renderBattleScreen(currentSession)

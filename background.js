@@ -1,5 +1,4 @@
 // --- Constants ---
-const DEFAULT_SESSION_DURATION_SECONDS = 25 * 60 // 25 minutes
 const TICK_INTERVAL_MS = 1000 // 1 second
 const HP_DAMAGE_PER_SECOND = 1
 
@@ -158,11 +157,11 @@ async function endSession(result) {
     userStats.currentStreak = 0
     currentSession.battleLog.push(`Defeat! ${monsterDefeatedName} survived.`)
 
-    // Check if defeat was due to timer running out (full 25 minutes passed)
+    // Check if defeat was due to timer running out (full session duration passed)
     const elapsedSeconds = Math.floor(
       (Date.now() - currentSession.startTime) / 1000
     )
-    // currentSession.durationSeconds might be slightly off from actual 25*60 due to timing, check if close
+    // currentSession.durationSeconds might be slightly off due to timing, check if close
     if (
       elapsedSeconds >= currentSession.durationSeconds - 2 &&
       currentSession.currentHP > 0
@@ -174,8 +173,9 @@ async function endSession(result) {
       if (!endedEarly) {
         userStats.totalPomodoros += 1 // Count as a completed Pomodoro duration
         pomodoroCompletedThisSession = true
+        const durationMinutes = Math.round(currentSession.durationSeconds / 60)
         currentSession.battleLog.push(
-          "Full 25 minutes completed. Pomodoro counted."
+          `Full ${durationMinutes} minutes completed. Pomodoro counted.`
         )
       }
     }
@@ -305,17 +305,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return
       }
 
-      // Set monster HP to the session duration in seconds for dynamic HP, or use monster.hp for fixed HP
-      const sessionHP = request.sessionDuration || monster.hp
+      // Session duration and HP both equal monster.hp for perfect timing
+      const sessionDuration = request.sessionDuration || monster.hp
+      const sessionHP = monster.hp
 
       const newSession = {
         monsterId: request.monsterId,
         monsterName: monster.name,
         monsterIcon: monster.icon,
         startTime: Date.now(),
-        durationSeconds:
-          request.sessionDuration || DEFAULT_SESSION_DURATION_SECONDS,
-        currentHP: sessionHP, // HP matches session duration or monster's default
+        durationSeconds: sessionDuration,
+        currentHP: sessionHP,
         maxHP: sessionHP,
         battleLog: [`Session started against ${monster.name}!`],
         isActive: true,

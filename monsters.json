@@ -1,7 +1,7 @@
 {
   "scrollfiend": {
     "id": "scrollfiend",
-    "name": "Scrollfiend",
+    "name": "Doomscoller",
     "icon": "assets/scrollfiend.png",
     "description": "Feeds on social media browsing. Heals when you visit Facebook, Instagram, X, TikTok, and other social media sites.",
     "hp": 1500,
