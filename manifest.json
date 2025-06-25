@@ -22,7 +22,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["monsters.json"],
+      "resources": ["monsters.json", "xp-config.json"],
       "matches": ["<all_urls>"]
     }
   ]

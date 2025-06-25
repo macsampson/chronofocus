@@ -46,5 +46,13 @@
     "hp": 1800,
     "triggerSites": [],
     "triggerEvent": "tab_switch"
+  },
+  "focusgremlin": {
+    "id": "focusgremlin",
+    "name": "Focus Gremlin",
+    "icon": "assets/scrollfiend.png",
+    "description": "A weak training dummy perfect for testing your focus skills. Quick sessions to test XP gains and bonuses!",
+    "hp": 5,
+    "triggerSites": ["example.com"]
   }
 }

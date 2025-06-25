@@ -1,0 +1,62 @@
+{
+  "base": {
+    "xpPerSession": 100,
+    "xpForStarting": 5,
+    "xpForHalfway": 10,
+    "xpPerHP": 0.1,
+    "minXP": 50,
+    "xpPerLevel": 500,
+    "xpPerPomodoro": 50
+  },
+  "modifiers": {
+    "noDistractions": 0.1,
+    "secondSession": 0.1,
+    "streakBonus": 0.2,
+    "minFocusCrit": 1.05,
+    "maxFocusCrit": 1.25
+  },
+  "levelCurve": {
+    "baseXP": 1000,
+    "exponent": 1.5
+  },
+  "streakMultiplier": {
+    "perDay": 0.05,
+    "maxMultiplier": 2.0
+  },
+  "defaults": {
+    "level": 1,
+    "xpRequiredForLevel": 500,
+    "streakMultiplier": 1.0,
+    "focusCrit": 1.0,
+    "baseXP": 100,
+    "microXP": 0,
+    "sessionXP": 100,
+    "title": "Focus Warrior",
+    "currentStreak": 0,
+    "xpEarned": 0
+  },
+  "titles": {
+    "1": "Distractling",
+    "3": "Focus Novice",
+    "5": "Attention Adept",
+    "8": "Pomodoro Paladin",
+    "12": "Mind Slayer",
+    "20": "Flowmaster"
+  },
+  "feedback": {
+    "startSession": "✨ Focus begins! — +5 XP",
+    "halfway": "⭐ Halfway there! — +10 XP",
+    "noDistractions": "🎯 Perfect Focus — +{bonus} XP Bonus!",
+    "secondSession": "🔥 Daily Focus! — +{bonus} XP Bonus!",
+    "streakBonus": "🔥 {streak}-Day Streak — +{bonus} XP Boost!",
+    "focusCrit": "💥 Crit Hit! — x{multiplier} XP Multiplier!",
+    "victory": "✅ Defeated {monster} — +{xp} XP!",
+    "levelUp": "🎉 Level Up! You are now a {title}!"
+  },
+  "difficultyMultipliers": {
+    "focusgremlin": 2.0,
+    "tubewyrm": 1.0,
+    "scrollfiend": 1.1,
+    "tabberwock": 1.2
+  }
+}

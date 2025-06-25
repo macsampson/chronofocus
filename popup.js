@@ -1,5 +1,17 @@
 // --- Constants and Data ---
 let MONSTERS = {}
+let XP_CONFIG = {}
+
+// Failsafe function to get defaults when XP_CONFIG is null
+function getXPDefault(key) {
+  if (!XP_CONFIG || !XP_CONFIG.defaults) {
+    console.error(
+      "XP_CONFIG not loaded properly, extension may not function correctly"
+    )
+    return null
+  }
+  return XP_CONFIG.defaults[key]
+}
 
 // Load monsters from JSON file
 async function loadMonsters() {
@@ -14,15 +26,25 @@ async function loadMonsters() {
   }
 }
 
+// Load XP configuration from JSON file
+async function loadXPConfig() {
+  try {
+    const response = await fetch("./xp-config.json")
+    XP_CONFIG = await response.json()
+    console.log("XP Config loaded:", XP_CONFIG)
+  } catch (error) {
+    console.error("Error loading XP config:", error)
+    XP_CONFIG = null
+  }
+}
+
 const SCREENS = {
   hubTown: document.getElementById("hub-town-screen"),
   battle: document.getElementById("battle-screen"),
   result: document.getElementById("result-screen"),
 }
 
-// XP and Level Constants
-const XP_PER_LEVEL = 500
-const XP_PER_POMODORO = 50
+// XP and Level Constants - now loaded from config
 
 // --- State ---
 let selectedMonsterId = null
@@ -42,6 +64,7 @@ const startAnotherSessionBtn = document.getElementById(
 
 // Hub Town Elements
 const usernameElement = document.getElementById("username")
+const userTitleElement = document.getElementById("user-title")
 const userAvatarElement = document.getElementById("user-avatar")
 const xpBarElement = document.getElementById("xp-bar")
 const xpTextElement = document.getElementById("xp-text")
@@ -71,19 +94,268 @@ const endSessionModal = document.getElementById("end-session-modal")
 const cancelEndSessionBtn = document.getElementById("cancel-end-session-btn")
 const confirmEndSessionBtn = document.getElementById("confirm-end-session-btn")
 
-// --- Helper Functions ---
+// --- XP System Functions ---
 
 function calculateLevel(totalXP) {
-  return Math.floor(totalXP / XP_PER_LEVEL) + 1
+  if (!XP_CONFIG || !XP_CONFIG.levelCurve) return XP_CONFIG.defaults.level
+  let level = 1
+  while (getXPRequiredForLevel(level) <= totalXP) {
+    level++
+  }
+  return level - 1
+}
+
+function getXPRequiredForLevel(level) {
+  if (!XP_CONFIG || !XP_CONFIG.levelCurve)
+    return XP_CONFIG.defaults.xpRequiredForLevel
+  return Math.floor(
+    XP_CONFIG.levelCurve.baseXP * Math.pow(level, XP_CONFIG.levelCurve.exponent)
+  )
 }
 
 function calculateXPForCurrentLevel(totalXP) {
-  return totalXP % XP_PER_LEVEL
+  const currentLevel = calculateLevel(totalXP)
+  const xpForCurrentLevel = getXPRequiredForLevel(currentLevel)
+  return totalXP - xpForCurrentLevel
 }
 
-function calculateXPForNextLevel() {
-  return XP_PER_LEVEL
+function calculateXPForNextLevel(totalXP) {
+  const currentLevel = calculateLevel(totalXP)
+  const xpForNextLevel = getXPRequiredForLevel(currentLevel + 1)
+  const xpForCurrentLevel = getXPRequiredForLevel(currentLevel)
+  return xpForNextLevel - xpForCurrentLevel
 }
+
+function getUserTitle(level) {
+  if (!XP_CONFIG || !XP_CONFIG.titles) return XP_CONFIG.defaults.title
+
+  // Find the highest title that the user qualifies for
+  let userTitle = XP_CONFIG.titles["1"]
+
+  Object.entries(XP_CONFIG.titles).forEach(([reqLevel, title]) => {
+    if (level >= parseInt(reqLevel)) {
+      userTitle = title
+    }
+  })
+
+  return userTitle
+}
+
+function calculateStreakMultiplier(streakDays) {
+  if (!XP_CONFIG || !XP_CONFIG.streakMultiplier)
+    return XP_CONFIG.defaults.streakMultiplier
+  const multiplier = 1 + streakDays * XP_CONFIG.streakMultiplier.perDay
+  return Math.min(multiplier, XP_CONFIG.streakMultiplier.maxMultiplier)
+}
+
+function generateFocusCrit() {
+  if (!XP_CONFIG || !XP_CONFIG.modifiers) return XP_CONFIG.defaults.focusCrit
+  const min = XP_CONFIG.modifiers.minFocusCrit
+  const max = XP_CONFIG.modifiers.maxFocusCrit
+  return Math.random() * (max - min) + min
+}
+
+function calculateMonsterBaseXP(monsterId) {
+  if (!XP_CONFIG || !XP_CONFIG.base || !MONSTERS)
+    return XP_CONFIG.defaults.baseXP
+
+  const monster = MONSTERS[monsterId]
+  if (!monster) return XP_CONFIG.base.xpPerSession
+
+  // Calculate base XP from monster HP
+  let baseXP = monster.hp * XP_CONFIG.base.xpPerHP
+
+  // Apply difficulty multiplier if configured
+  if (
+    XP_CONFIG.difficultyMultipliers &&
+    XP_CONFIG.difficultyMultipliers[monsterId]
+  ) {
+    baseXP *= XP_CONFIG.difficultyMultipliers[monsterId]
+  }
+
+  // Ensure minimum XP
+  baseXP = Math.max(baseXP, XP_CONFIG.base.minXP)
+
+  return Math.floor(baseXP)
+}
+
+function calculateSessionXP(sessionData) {
+  if (!XP_CONFIG || !XP_CONFIG.base || !XP_CONFIG.modifiers)
+    return XP_CONFIG.defaults.sessionXP
+
+  // Calculate base XP based on monster difficulty (health)
+  let baseXP = calculateMonsterBaseXP(sessionData.monsterId)
+  let bonuses = []
+
+  // Check for no distractions (no healing events in battle log)
+  const hadDistractions =
+    sessionData.battleLog &&
+    sessionData.battleLog.some(
+      (log) => log.includes("healed") || log.includes("Distracted")
+    )
+
+  if (!hadDistractions) {
+    const bonus = Math.floor(baseXP * XP_CONFIG.modifiers.noDistractions)
+    baseXP += bonus
+    bonuses.push({
+      type: "noDistractions",
+      amount: bonus,
+      message: XP_CONFIG.feedback.noDistractions.replace("{bonus}", bonus),
+    })
+  }
+
+  // Check for second session today
+  const todayPomodoros = getTodayPomodoros()
+  if (todayPomodoros >= 1) {
+    const bonus = Math.floor(baseXP * XP_CONFIG.modifiers.secondSession)
+    baseXP += bonus
+    bonuses.push({
+      type: "secondSession",
+      amount: bonus,
+      message: XP_CONFIG.feedback.secondSession.replace("{bonus}", bonus),
+    })
+  }
+
+  // Check for streak bonus (>3 days)
+  const currentStreak =
+    userStats?.currentStreak ?? XP_CONFIG.defaults.currentStreak
+  if (currentStreak > 3) {
+    const bonus = Math.floor(baseXP * XP_CONFIG.modifiers.streakBonus)
+    baseXP += bonus
+    bonuses.push({
+      type: "streakBonus",
+      amount: bonus,
+      message: XP_CONFIG.feedback.streakBonus
+        .replace("{streak}", currentStreak)
+        .replace("{bonus}", bonus),
+    })
+  }
+
+  // Apply focus crit multiplier
+  const critMultiplier = generateFocusCrit()
+  const finalXP = Math.floor(baseXP * critMultiplier)
+
+  if (critMultiplier > 1.0) {
+    bonuses.push({
+      type: "focusCrit",
+      amount: finalXP - baseXP,
+      multiplier: critMultiplier.toFixed(2),
+      message: XP_CONFIG.feedback.focusCrit.replace(
+        "{multiplier}",
+        critMultiplier.toFixed(2)
+      ),
+    })
+  }
+
+  return {
+    finalXP,
+    bonuses,
+    baseXP: calculateMonsterBaseXP(sessionData.monsterId),
+  }
+}
+
+function showXPFeedback(message, isLevelUp = false) {
+  // Create a feedback element
+  const feedback = document.createElement("div")
+  feedback.className = isLevelUp ? "xp-feedback level-up" : "xp-feedback"
+  feedback.textContent = message
+
+  // Add to the current screen
+  const activeScreen = document.querySelector(".screen.active")
+  if (activeScreen) {
+    activeScreen.appendChild(feedback)
+
+    // Trigger animation
+    setTimeout(() => feedback.classList.add("show"), 10)
+
+    // Remove after animation
+    setTimeout(
+      () => {
+        feedback.classList.add("fade-out")
+        setTimeout(() => feedback.remove(), 500)
+      },
+      isLevelUp ? 3000 : 2000
+    )
+  }
+}
+
+function animateXPBar(startXP, endXP, totalXP) {
+  const currentLevel = calculateLevel(startXP)
+  const newLevel = calculateLevel(endXP)
+
+  // Animate XP bar
+  const startCurrentXP = calculateXPForCurrentLevel(startXP)
+  const endCurrentXP = calculateXPForCurrentLevel(endXP)
+  const maxXPForLevel = calculateXPForNextLevel(startXP)
+
+  let progress = 0
+  const duration = 1000 // 1 second
+  const stepTime = 16 // ~60fps
+  const steps = duration / stepTime
+
+  const animate = () => {
+    progress++
+    const ratio = progress / steps
+
+    if (ratio <= 1) {
+      const currentXP = startCurrentXP + (endCurrentXP - startCurrentXP) * ratio
+      const percentage = (currentXP / maxXPForLevel) * 100
+
+      xpBarElement.style.width = `${Math.min(100, percentage)}%`
+      xpTextElement.textContent = `${Math.floor(
+        currentXP
+      )} / ${maxXPForLevel} XP`
+
+      requestAnimationFrame(animate)
+    } else {
+      // Final update
+      updateXPDisplay(endXP)
+
+      // Check for level up
+      if (newLevel > currentLevel) {
+        triggerLevelUpAnimation(newLevel)
+      }
+    }
+  }
+
+  animate()
+}
+
+function triggerLevelUpAnimation(newLevel) {
+  const title = getUserTitle(newLevel)
+
+  // Add explosion effect to XP bar
+  xpBarElement.classList.add("level-up-explosion")
+  setTimeout(() => xpBarElement.classList.remove("level-up-explosion"), 1000)
+
+  // Show level up message
+  showXPFeedback(XP_CONFIG.feedback.levelUp.replace("{title}", title), true)
+
+  // Update level badge with animation
+  levelBadgeElement.classList.add("level-up-pulse")
+  levelBadgeElement.textContent = `Level ${newLevel}`
+  setTimeout(() => levelBadgeElement.classList.remove("level-up-pulse"), 1000)
+
+  // Update title
+  userTitleElement.textContent = title
+}
+
+function updateXPDisplay(totalXP) {
+  const level = calculateLevel(totalXP)
+  const currentXP = calculateXPForCurrentLevel(totalXP)
+  const maxXP = calculateXPForNextLevel(totalXP)
+  const percentage = (currentXP / maxXP) * 100
+
+  xpBarElement.style.width = `${percentage}%`
+  xpTextElement.textContent = `${currentXP} / ${maxXP} XP`
+  levelBadgeElement.textContent = `Level ${level}`
+
+  // Update title
+  const title = getUserTitle(level)
+  userTitleElement.textContent = title
+}
+
+// --- Helper Functions ---
 
 function generateUsername() {
   const adjectives = [
@@ -199,64 +471,45 @@ function updateHubTownDisplay(stats) {
   }
   usernameElement.textContent = username
 
-  // Update level and XP
-  const currentLevel = calculateLevel(stats.currentXP)
-  const currentLevelXP = calculateXPForCurrentLevel(stats.currentXP)
-  const nextLevelXP = calculateXPForNextLevel()
-
-  levelBadgeElement.textContent = `Level ${currentLevel}`
-  xpTextElement.textContent = `${currentLevelXP} / ${nextLevelXP} XP`
-
-  // Animate XP bar
-  const xpPercentage = (currentLevelXP / nextLevelXP) * 100
-  setTimeout(() => {
-    xpBarElement.style.width = `${xpPercentage}%`
-  }, 100)
+  // Update XP and level display
+  updateXPDisplay(stats.currentXP)
 
   // Update stats
   totalPomodorosElement.textContent = stats.totalPomodoros
-  currentStreakElement.innerHTML =
-    stats.currentStreak > 0 ? `🔥 ${stats.currentStreak}` : `💤 0`
+  const streakText =
+    stats.currentStreak > 0
+      ? `🔥 ${stats.currentStreak}`
+      : `💤 ${stats.currentStreak}`
+  currentStreakElement.textContent = streakText
 
   // Update today's stats
-  const todayPomodoros = getTodayPomodoros()
-  todayPomodorosElement.textContent = todayPomodoros
-
-  // Update most defeated monster
-  const mostDefeated = getMostDefeatedMonster(stats.monstersDefeated)
-  mostDefeatedMonsterElement.textContent = mostDefeated
+  todayPomodorosElement.textContent = getTodayPomodoros()
+  mostDefeatedMonsterElement.textContent = getMostDefeatedMonster(
+    stats.monstersDefeated
+  )
 
   // Update session history
   const history = getRecentSessionHistory()
   streakIndicatorsElement.innerHTML = ""
+  history.forEach((session, index) => {
+    const indicator = document.createElement("span")
+    indicator.className = `session-indicator ${
+      session.success ? "success" : "failure"
+    }`
+    indicator.textContent = session.success ? "✅" : "❌"
+    indicator.title = `Session ${index + 1}: ${
+      session.success ? "Victory" : "Defeat"
+    }`
+    streakIndicatorsElement.appendChild(indicator)
+  })
 
-  if (history.length === 0) {
-    // Default placeholder if no history
-    for (let i = 0; i < 5; i++) {
-      const indicator = document.createElement("span")
-      indicator.className = "session-indicator"
-      indicator.textContent = "⚪"
-      streakIndicatorsElement.appendChild(indicator)
-    }
-  } else {
-    // Fill remaining slots with placeholders
-    const remaining = 5 - history.length
-    for (let i = 0; i < remaining; i++) {
-      const indicator = document.createElement("span")
-      indicator.className = "session-indicator"
-      indicator.textContent = "⚪"
-      streakIndicatorsElement.appendChild(indicator)
-    }
-
-    // Add actual history
-    history.forEach((session) => {
-      const indicator = document.createElement("span")
-      indicator.className = `session-indicator ${
-        session.success ? "success" : "fail"
-      }`
-      indicator.textContent = session.success ? "✅" : "❌"
-      streakIndicatorsElement.appendChild(indicator)
-    })
+  // Fill remaining slots with placeholder
+  for (let i = history.length; i < 5; i++) {
+    const placeholder = document.createElement("span")
+    placeholder.className = "session-indicator placeholder"
+    placeholder.textContent = "⬜"
+    placeholder.title = "No session"
+    streakIndicatorsElement.appendChild(placeholder)
   }
 }
 
@@ -454,8 +707,32 @@ function renderResultScreen(outcomeData) {
     resultMessage.innerHTML = `😞 Defeat!`
   }
 
-  // Set XP earned
-  xpEarnedDisplay.textContent = `XP Earned: ${outcomeData.xpEarned || 0}`
+  // Enhanced XP display with bonuses
+  let xpHTML = `<div class="xp-breakdown">`
+
+  if (outcomeData.xpBreakdown) {
+    xpHTML += `<div class="base-xp">Base XP: ${outcomeData.xpBreakdown.baseXP}</div>`
+
+    if (
+      outcomeData.xpBreakdown.bonuses &&
+      outcomeData.xpBreakdown.bonuses.length > 0
+    ) {
+      xpHTML += `<div class="xp-bonuses">`
+      outcomeData.xpBreakdown.bonuses.forEach((bonus) => {
+        xpHTML += `<div class="xp-bonus">${bonus.message}</div>`
+      })
+      xpHTML += `</div>`
+    }
+
+    xpHTML += `<div class="total-xp"><strong>Total XP Earned: ${outcomeData.xpEarned}</strong></div>`
+  } else {
+    xpHTML += `<div class="total-xp">XP Earned: ${
+      outcomeData.xpEarned ?? XP_CONFIG.defaults.xpEarned
+    }</div>`
+  }
+
+  xpHTML += `</div>`
+  xpEarnedDisplay.innerHTML = xpHTML
 
   // Set stats display
   let statsHTML = ""
@@ -467,7 +744,9 @@ function renderResultScreen(outcomeData) {
   }
   if (outcomeData.currentXP !== undefined) {
     const level = calculateLevel(outcomeData.currentXP)
+    const title = getUserTitle(level)
     statsHTML += `<p><strong>Total XP:</strong> ${outcomeData.currentXP} (Level ${level})</p>`
+    statsHTML += `<p><strong>Title:</strong> ${title}</p>`
   }
   if (outcomeData.currentStreak !== undefined) {
     statsHTML += `<p><strong>Current Streak:</strong> ${outcomeData.currentStreak}</p>`
@@ -476,6 +755,25 @@ function renderResultScreen(outcomeData) {
   statsDisplayContent.innerHTML = statsHTML
   startAnotherSessionBtn.style.display = "block"
   startAnotherSessionBtn.textContent = "Return to Hub Town"
+
+  // Animate XP gain if we have previous XP data
+  if (
+    outcomeData.previousXP !== undefined &&
+    outcomeData.currentXP !== undefined
+  ) {
+    setTimeout(() => {
+      animateXPBar(outcomeData.previousXP, outcomeData.currentXP)
+    }, 500)
+
+    // Show XP feedback messages
+    if (outcomeData.xpBreakdown && outcomeData.xpBreakdown.bonuses) {
+      outcomeData.xpBreakdown.bonuses.forEach((bonus, index) => {
+        setTimeout(() => {
+          showXPFeedback(bonus.message)
+        }, 1000 + index * 500)
+      })
+    }
+  }
 
   switchScreen("result")
 }
@@ -586,8 +884,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", async () => {
-  // Load monsters first
-  await loadMonsters()
+  // Load monsters and XP config first
+  await Promise.all([loadMonsters(), loadXPConfig()])
 
   try {
     const backgroundResponse = await chrome.runtime.sendMessage({

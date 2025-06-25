@@ -2,6 +2,32 @@
 const TICK_INTERVAL_MS = 1000 // 1 second
 const HP_DAMAGE_PER_SECOND = 1
 
+// XP System Configuration
+let XP_CONFIG = null
+
+// Failsafe function to get defaults when XP_CONFIG is null
+function getXPDefault(key) {
+  if (!XP_CONFIG || !XP_CONFIG.defaults) {
+    console.error(
+      "XP_CONFIG not loaded properly, extension may not function correctly"
+    )
+    return null
+  }
+  return XP_CONFIG.defaults[key]
+}
+
+// Load XP configuration
+async function loadXPConfig() {
+  try {
+    const response = await fetch(chrome.runtime.getURL("xp-config.json"))
+    XP_CONFIG = await response.json()
+    console.log("Background: XP Config loaded:", XP_CONFIG)
+  } catch (error) {
+    console.error("Background: Error loading XP config:", error)
+    XP_CONFIG = null
+  }
+}
+
 // --- State (managed via chrome.storage.local) ---
 // 'currentSession': { monsterId, monsterName, monsterIcon, startTime, durationSeconds, currentHP, maxHP, battleLog, isActive }
 // 'userStats': { monstersDefeated: { scrollfiend: 0, ... }, totalPomodoros: 0, currentXP: 0, currentStreak: 0 }
@@ -14,6 +40,9 @@ let sessionTimerInterval = null
 chrome.runtime.onInstalled.addListener(async (details) => {
   // Added details argument
   console.log("FocusForge extension installed/updated. Reason:", details.reason)
+
+  // Load XP configuration and monsters
+  await Promise.all([loadXPConfig(), loadMonsters()])
   // Initialize or ensure structure of userStats and other settings
   const currentData = await chrome.storage.local.get([
     "userStats",
@@ -65,6 +94,143 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await chrome.storage.local.set(newStorage)
   console.log("Storage initialized/verified:", newStorage)
 })
+
+// Load configurations on startup
+chrome.runtime.onStartup.addListener(async () => {
+  console.log("Extension startup - loading configurations")
+  await Promise.all([loadXPConfig(), loadMonsters()])
+})
+
+// --- XP System Functions ---
+async function getTodayPomodoros() {
+  const today = new Date().toDateString()
+  const result = await chrome.storage.local.get(`pomodoros_${today}`)
+  const todayPomodoros = parseInt(result[`pomodoros_${today}`] || 0, 10)
+  return todayPomodoros
+}
+
+function generateFocusCrit() {
+  if (!XP_CONFIG || !XP_CONFIG.modifiers) return getXPDefault("focusCrit")
+  const min = XP_CONFIG.modifiers.minFocusCrit
+  const max = XP_CONFIG.modifiers.maxFocusCrit
+  return Math.random() * (max - min) + min
+}
+
+function calculateMonsterBaseXP(monsterId) {
+  if (!XP_CONFIG || !XP_CONFIG.base || !MONSTERS_DATA)
+    return getXPDefault("baseXP")
+
+  const monster = MONSTERS_DATA[monsterId]
+  if (!monster) return XP_CONFIG.base.xpPerSession
+
+  // Calculate base XP from monster HP
+  let baseXP = monster.hp * XP_CONFIG.base.xpPerHP
+
+  // Apply difficulty multiplier if configured
+  if (
+    XP_CONFIG.difficultyMultipliers &&
+    XP_CONFIG.difficultyMultipliers[monsterId]
+  ) {
+    baseXP *= XP_CONFIG.difficultyMultipliers[monsterId]
+  }
+
+  // Ensure minimum XP
+  baseXP = Math.max(baseXP, XP_CONFIG.base.minXP)
+
+  return Math.floor(baseXP)
+}
+
+async function calculateSessionXP(sessionData, userStats) {
+  if (!XP_CONFIG || !XP_CONFIG.base || !XP_CONFIG.modifiers)
+    return {
+      finalXP: getXPDefault("sessionXP"),
+      bonuses: [],
+      baseXP: getXPDefault("baseXP"),
+    }
+
+  // Calculate base XP based on monster difficulty (health)
+  let baseXP = calculateMonsterBaseXP(sessionData.monsterId)
+  let bonuses = []
+
+  // Check for no distractions (no healing events in battle log)
+  const hadDistractions =
+    sessionData.battleLog &&
+    sessionData.battleLog.some(
+      (log) => log.includes("healed") || log.includes("Distracted")
+    )
+
+  if (!hadDistractions) {
+    const bonus = Math.floor(baseXP * XP_CONFIG.modifiers.noDistractions)
+    baseXP += bonus
+    bonuses.push({
+      type: "noDistractions",
+      amount: bonus,
+      message: XP_CONFIG.feedback.noDistractions.replace("{bonus}", bonus),
+    })
+  }
+
+  // Check for second session today
+  const todayPomodoros = await getTodayPomodoros()
+  if (todayPomodoros >= 1) {
+    const bonus = Math.floor(baseXP * XP_CONFIG.modifiers.secondSession)
+    baseXP += bonus
+    bonuses.push({
+      type: "secondSession",
+      amount: bonus,
+      message: XP_CONFIG.feedback.secondSession.replace("{bonus}", bonus),
+    })
+  }
+
+  // Check for streak bonus (>3 days)
+  const currentStreak =
+    userStats?.currentStreak ?? XP_CONFIG.defaults.currentStreak
+  if (currentStreak > 3) {
+    const bonus = Math.floor(baseXP * XP_CONFIG.modifiers.streakBonus)
+    baseXP += bonus
+    bonuses.push({
+      type: "streakBonus",
+      amount: bonus,
+      message: XP_CONFIG.feedback.streakBonus
+        .replace("{streak}", currentStreak)
+        .replace("{bonus}", bonus),
+    })
+  }
+
+  // Apply focus crit multiplier
+  const critMultiplier = generateFocusCrit()
+  const finalXP = Math.floor(baseXP * critMultiplier)
+
+  if (critMultiplier > 1.0) {
+    bonuses.push({
+      type: "focusCrit",
+      amount: finalXP - baseXP,
+      multiplier: critMultiplier.toFixed(2),
+      message: XP_CONFIG.feedback.focusCrit.replace(
+        "{multiplier}",
+        critMultiplier.toFixed(2)
+      ),
+    })
+  }
+
+  return {
+    finalXP,
+    bonuses,
+    baseXP: calculateMonsterBaseXP(sessionData.monsterId),
+  }
+}
+
+function awardMicroXP(type, sessionData) {
+  if (!XP_CONFIG || !XP_CONFIG.base) return XP_CONFIG.defaults.microXP
+
+  switch (type) {
+    case "start":
+      return XP_CONFIG.base.xpForStarting
+    case "halfway":
+      return XP_CONFIG.base.xpForHalfway
+    default:
+      return XP_CONFIG.defaults.microXP
+  }
+}
 
 // --- Helper Functions ---
 async function updatePopup() {
@@ -138,8 +304,15 @@ async function endSession(result) {
   if (!userStats.monstersDefeated)
     userStats.monstersDefeated = { scrollfiend: 0, tubewyrm: 0, tabberwock: 0 }
 
+  // Store previous XP for animation
+  const previousXP = userStats.currentXP
+  let xpBreakdown = null
+
   if (result === "victory") {
-    xpEarned = 100
+    // Calculate XP with new system
+    xpBreakdown = await calculateSessionXP(currentSession, userStats)
+    xpEarned = xpBreakdown.finalXP
+
     userStats.currentXP += xpEarned
     userStats.totalPomodoros += 1
     pomodoroCompletedThisSession = true
@@ -149,9 +322,22 @@ async function endSession(result) {
     } else {
       userStats.monstersDefeated[currentSession.monsterId] = 1
     }
-    currentSession.battleLog.push(
-      `Victory! ${monsterDefeatedName} defeated. +${xpEarned} XP.`
-    )
+
+    // Add XP breakdown messages to battle log
+    currentSession.battleLog.push(`Victory! ${monsterDefeatedName} defeated.`)
+
+    if (XP_CONFIG && XP_CONFIG.feedback) {
+      currentSession.battleLog.push(
+        XP_CONFIG.feedback.victory
+          .replace("{monster}", monsterDefeatedName)
+          .replace("{xp}", xpEarned)
+      )
+
+      // Add bonus messages
+      xpBreakdown.bonuses.forEach((bonus) => {
+        currentSession.battleLog.push(bonus.message)
+      })
+    }
   } else {
     // result === 'defeat' (either by timer running out or early end)
     userStats.currentStreak = 0
@@ -184,6 +370,8 @@ async function endSession(result) {
   const outcomeData = {
     result: result,
     xpEarned: xpEarned,
+    xpBreakdown: xpBreakdown,
+    previousXP: previousXP,
     monsterDefeatedName: result === "victory" ? monsterDefeatedName : null,
     pomodoroCompleted: pomodoroCompletedThisSession,
     // Pass updated stats for immediate display on result screen
@@ -238,6 +426,36 @@ async function onTimerTick() {
     (Date.now() - currentSession.startTime) / 1000
   )
   const remainingSeconds = currentSession.durationSeconds - elapsedSeconds
+
+  // Track micro-progress milestones
+  if (!currentSession.microProgressTracked) {
+    currentSession.microProgressTracked = {
+      started: false,
+      halfway: false,
+    }
+  }
+
+  // Award starting XP (only once)
+  if (!currentSession.microProgressTracked.started && elapsedSeconds >= 1) {
+    currentSession.microProgressTracked.started = true
+    const startXP = awardMicroXP("start", currentSession)
+    if (startXP > 0 && XP_CONFIG && XP_CONFIG.feedback) {
+      currentSession.battleLog.push(XP_CONFIG.feedback.startSession)
+    }
+  }
+
+  // Award halfway XP (only once)
+  const halfwayPoint = Math.floor(currentSession.durationSeconds / 2)
+  if (
+    !currentSession.microProgressTracked.halfway &&
+    elapsedSeconds >= halfwayPoint
+  ) {
+    currentSession.microProgressTracked.halfway = true
+    const halfwayXP = awardMicroXP("halfway", currentSession)
+    if (halfwayXP > 0 && XP_CONFIG && XP_CONFIG.feedback) {
+      currentSession.battleLog.push(XP_CONFIG.feedback.halfway)
+    }
+  }
 
   // Deal damage
   currentSession.currentHP -= HP_DAMAGE_PER_SECOND
@@ -299,6 +517,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
 
       const monster = MONSTERS_DATA[request.monsterId] // Need monster data here
+      console.log("Monster:", monster)
       if (!monster) {
         console.error("Invalid monsterId:", request.monsterId)
         sendResponse({ status: "error", message: "Invalid monster ID." })
