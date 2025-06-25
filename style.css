@@ -1,5 +1,5 @@
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   width: 380px; /* Slightly wider for better content fit */
   min-height: 300px; /* Minimum height */
   padding: 0;
@@ -15,7 +15,9 @@ body {
   box-sizing: border-box;
 }
 
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   color: #2c3e50;
   text-align: center;
   margin-top: 0;
@@ -54,13 +56,13 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button.secondary { /* For less prominent actions like 'End Session Early' */
+button.secondary {
+  /* For less prominent actions like 'End Session Early' */
   background-color: #e74c3c; /* Red for destructive/warning */
 }
 button.secondary:hover {
   background-color: #c0392b; /* Darker red */
 }
-
 
 .monster-card {
   border: 2px solid #ecf0f1; /* Light grey border */
@@ -76,7 +78,7 @@ button.secondary:hover {
 
 .monster-card:hover {
   border-color: #bdc3c7; /* Slightly darker border on hover */
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
 .monster-card.selected {
@@ -112,7 +114,6 @@ button.secondary:hover {
   color: #555;
   margin: 5px 0 0;
 }
-
 
 .hp-bar-container {
   width: 100%;
@@ -206,20 +207,103 @@ button.secondary:hover {
   font-style: normal;
 }
 
-#battle-monster-icon { /* Styles for the monster icon on the battle screen */
+#battle-monster-icon {
   display: block;
   margin: 15px auto;
   border: 2px solid #dde4e9;
   border-radius: 4px;
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
 }
 
 /* Centering title for monster selection */
 #monster-selection-screen h2 {
-    margin-bottom: 20px;
+  margin-bottom: 20px;
 }
 
 /* Small text for descriptions or logs */
 small {
-    font-size: 0.8em;
-    color: #7f8c8d;
+  font-size: 0.8em;
+  color: #7f8c8d;
+}
+
+@keyframes monster-attack {
+  0% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-5px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-5px);
+  }
+  80% {
+    transform: translateX(5px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.monster-attack-anim {
+  animation: monster-attack 0.4s;
+}
+
+/* Modal styles */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-content {
+  background: #fff;
+  padding: 28px 24px 20px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  max-width: 340px;
+  width: 100%;
+  text-align: center;
+}
+.modal-content h2 {
+  margin-top: 0;
+  color: #e74c3c;
+  font-size: 1.3em;
+}
+.modal-content p {
+  margin: 18px 0 24px 0;
+  color: #333;
+  font-size: 1em;
+}
+.modal-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.modal-buttons button {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 1em;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+.modal-buttons .danger {
+  background: #e74c3c;
+  color: #fff;
+}
+.modal-buttons button:not(.danger) {
+  background: #ecf0f1;
+  color: #333;
 }

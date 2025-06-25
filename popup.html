@@ -1,47 +1,115 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>FocusForge</title>
-  <meta charset="UTF-8">
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <div id="app">
-    <!-- Monster Selection Screen -->
-    <div id="monster-selection-screen" class="screen">
-      <h2>Choose a Distraction to Battle</h2>
-      <div id="monster-cards-container">
-        <!-- Monster cards will be injected here -->
+  <head>
+    <title>ChronoFocus</title>
+    <meta charset="UTF-8" />
+    <link
+      rel="stylesheet"
+      href="style.css"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Monster Selection Screen -->
+      <div
+        id="monster-selection-screen"
+        class="screen"
+      >
+        <h2>Choose a Distraction to Battle</h2>
+        <div id="monster-cards-container">
+          <!-- Monster cards will be injected here -->
+        </div>
+        <button
+          id="start-session-btn"
+          disabled
+        >
+          Start Focus Session
+        </button>
       </div>
-      <button id="start-session-btn" disabled>Start Focus Session</button>
-    </div>
 
-    <!-- Battle Screen -->
-    <div id="battle-screen" class="screen">
-      <h2 id="battle-monster-name">Battling...</h2>
-      <div class="timer" id="timer-display">25:00</div>
-      <div>Monster HP:</div>
-      <div class="hp-bar-container">
-        <div class="hp-bar" id="monster-hp-bar" style="width: 100%;">100/100</div>
+      <!-- Battle Screen -->
+      <div
+        id="battle-screen"
+        class="screen"
+      >
+        <h2 id="battle-monster-name">Battling...</h2>
+        <div
+          class="timer"
+          id="timer-display"
+        >
+          25:00
+        </div>
+        <div>Monster HP:</div>
+        <div class="hp-bar-container">
+          <div
+            class="hp-bar"
+            id="monster-hp-bar"
+            style="width: 100%"
+          >
+            100/100
+          </div>
+        </div>
+        <img
+          id="battle-monster-icon"
+          src=""
+          alt="Monster Icon"
+          class="monster-icon"
+          style="margin: 10px auto; display: block"
+        />
+        <h3>Battle Log</h3>
+        <div
+          class="battle-log"
+          id="battle-log-content"
+        >
+          <!-- Log messages will appear here -->
+        </div>
+        <button id="end-session-early-btn">End Session Early</button>
       </div>
-      <img id="battle-monster-icon" src="" alt="Monster Icon" class="monster-icon" style="margin: 10px auto; display: block;">
-      <h3>Battle Log</h3>
-      <div class="battle-log" id="battle-log-content">
-        <!-- Log messages will appear here -->
-      </div>
-      <button id="end-session-early-btn">End Session Early</button>
-    </div>
 
-    <!-- Result Screen -->
-    <div id="result-screen" class="screen">
-      <h2 id="result-message">Outcome</h2>
-      <div class="xp-earned" id="xp-earned-display">XP Earned: 0</div>
-      <div class="stats-display" id="stats-display-content">
-        <!-- Stats like total pomodoros, streak will show here -->
+      <!-- Result Screen -->
+      <div
+        id="result-screen"
+        class="screen"
+      >
+        <h2 id="result-message">Outcome</h2>
+        <div
+          class="xp-earned"
+          id="xp-earned-display"
+        >
+          XP Earned: 0
+        </div>
+        <div
+          class="stats-display"
+          id="stats-display-content"
+        >
+          <!-- Stats like total pomodoros, streak will show here -->
+        </div>
+        <button id="start-another-session-btn">Start Another Session</button>
       </div>
-      <button id="start-another-session-btn">Start Another Session</button>
+      <!-- Confirmation Modal for Ending Session Early -->
+      <div
+        id="end-session-modal"
+        class="modal"
+        style="display: none"
+      >
+        <div class="modal-content">
+          <h2>❗ End Session Early?</h2>
+          <p>
+            Leaving early means you won't defeat the monster and won't earn any
+            XP.<br />Are you sure you want to stop now?
+          </p>
+          <div class="modal-buttons">
+            <button id="cancel-end-session-btn">Cancel</button>
+            <button
+              id="confirm-end-session-btn"
+              class="danger"
+            >
+              Yes, End Session
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+  </body>
 </html>
