@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>FocusForge</title>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Monster Selection Screen -->
+    <div id="monster-selection-screen" class="screen">
+      <h2>Choose a Distraction to Battle</h2>
+      <div id="monster-cards-container">
+        <!-- Monster cards will be injected here -->
+      </div>
+      <button id="start-session-btn" disabled>Start Focus Session</button>
+    </div>
+
+    <!-- Battle Screen -->
+    <div id="battle-screen" class="screen">
+      <h2 id="battle-monster-name">Battling...</h2>
+      <div class="timer" id="timer-display">25:00</div>
+      <div>Monster HP:</div>
+      <div class="hp-bar-container">
+        <div class="hp-bar" id="monster-hp-bar" style="width: 100%;">100/100</div>
+      </div>
+      <img id="battle-monster-icon" src="" alt="Monster Icon" class="monster-icon" style="margin: 10px auto; display: block;">
+      <h3>Battle Log</h3>
+      <div class="battle-log" id="battle-log-content">
+        <!-- Log messages will appear here -->
+      </div>
+      <button id="end-session-early-btn">End Session Early</button>
+    </div>
+
+    <!-- Result Screen -->
+    <div id="result-screen" class="screen">
+      <h2 id="result-message">Outcome</h2>
+      <div class="xp-earned" id="xp-earned-display">XP Earned: 0</div>
+      <div class="stats-display" id="stats-display-content">
+        <!-- Stats like total pomodoros, streak will show here -->
+      </div>
+      <button id="start-another-session-btn">Start Another Session</button>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
