@@ -47,7 +47,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (!currentData.blockedSites || details.reason === "install") {
     newStorage.blockedSites = [
       "youtube.com",
-      "twitter.com",
+      "x.com",
       "reddit.com",
       "instagram.com",
       "facebook.com",
