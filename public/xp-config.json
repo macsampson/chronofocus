@@ -1,12 +1,12 @@
 {
   "base": {
     "xpPerSession": 100,
-    "xpForStarting": 5,
+    "xpForStarting": 0,
     "xpForHalfway": 10,
     "xpPerHP": 0.1,
-    "minXP": 50,
+    "minXP": 0,
     "xpPerLevel": 500,
-    "xpPerPomodoro": 50
+    "xpPerPomodoro": 0
   },
   "modifiers": {
     "noDistractions": 0.1,
@@ -54,7 +54,7 @@
     "levelUp": "🎉 Level Up! You are now a {title}!"
   },
   "difficultyMultipliers": {
-    "focusgremlin": 2.0,
+    "testgremlin": 0.2,
     "tubewyrm": 1.0,
     "scrollfiend": 1.1,
     "tabberwock": 1.2

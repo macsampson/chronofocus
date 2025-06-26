@@ -235,8 +235,8 @@ body {
 }
 
 .monster-icon {
-  width: 100px;
-  height: 100px;
+  width: 60px;
+  height: 60px;
   margin-right: 15px;
   border-radius: 8px;
   object-fit: contain;
@@ -502,9 +502,9 @@ button.secondary:hover {
   font-style: normal;
 }
 
-.battle-monster-icon {
+#battle-monster-icon {
   display: block;
-  margin: 10px auto;
+  margin: 15px auto;
   border: 2px solid #dde4e9;
   border-radius: 4px;
   width: 180px;
@@ -895,6 +895,10 @@ small {
 }
 
 /* Battle monster icon healing effect */
+#battle-monster-icon.healing {
+  animation: healingGlow 2s infinite alternate ease-in-out;
+}
+
 .battle-monster-icon.healing {
   animation: healingGlow 2s infinite alternate ease-in-out;
 }
