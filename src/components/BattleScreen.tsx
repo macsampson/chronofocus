@@ -12,7 +12,6 @@ export const BattleScreen = ({
   monster,
   sessionData,
   onEndSessionEarly,
-  onTriggerDistraction,
 }: BattleScreenProps) => {
   const [showEndModal, setShowEndModal] = useState(false)
   const [isAttackAnimating, setIsAttackAnimating] = useState(false)
@@ -116,15 +115,19 @@ export const BattleScreen = ({
   }
 
   return (
-    <div className="screen active">
-      <h2>Battling {monster.name}</h2>
+    <div className="block">
+      <h2 className="text-gray-700 text-center text-2xl font-semibold mt-0 mb-4">
+        Battling {monster.name}
+      </h2>
 
-      <div className="timer">{formatTime(sessionData.timerValue)}</div>
+      <div className="text-5xl font-bold text-center my-4 text-danger-600">
+        {formatTime(sessionData.timerValue)}
+      </div>
 
-      <div>Monster HP:</div>
-      <div className="hp-bar-container">
+      <div className="text-gray-700 mb-2">Monster HP:</div>
+      <div className="w-full bg-gray-200 rounded-md my-2 mb-4 p-1">
         <div
-          className="hp-bar"
+          className="h-6 bg-success-500 rounded-sm text-center leading-6 text-white font-bold text-sm transition-all duration-300 ease-in-out whitespace-nowrap overflow-hidden"
           style={{ width: `${Math.max(0, hpPercentage)}%` }}
         >
           {Math.max(0, Math.round(sessionData.currentHP))}/{sessionData.maxHP}
@@ -134,24 +137,35 @@ export const BattleScreen = ({
       <img
         src={monster.icon}
         alt="Monster Icon"
-        className={`battle-monster-icon ${
-          isAttackAnimating ? "monster-attack-anim" : ""
-        } ${isHealing ? "healing" : ""}`}
-        style={{ margin: "10px auto", display: "block" }}
+        className={`block my-2 mx-auto border-2 border-gray-200 rounded w-44 h-44 object-contain ${
+          isAttackAnimating ? "animate-monster-attack" : ""
+        } ${isHealing ? "animate-healing-glow" : ""}`}
       />
 
-      <h3>Battle Log</h3>
-      <div className="battle-log">
+      <h3 className="text-gray-700 text-center text-xl font-semibold mt-5 mb-4">
+        Battle Log
+      </h3>
+      <div className="h-24 overflow-y-auto border border-gray-300 p-2 mt-2 text-sm bg-gray-50 rounded leading-6">
         {sessionData.battleLog
           .slice()
           .reverse()
           .map((entry, index) => (
-            <p key={index}>{entry}</p>
+            <p
+              key={index}
+              className="m-0 mb-1 pb-1 border-b border-dotted border-gray-200 text-gray-800 last:border-b-0 last:mb-0"
+            >
+              {entry}
+            </p>
           ))}
       </div>
 
-      <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
-        <button onClick={handleEndSessionClick}>End Session Early</button>
+      <div className="flex gap-2 mt-5">
+        <button
+          onClick={handleEndSessionClick}
+          className="block w-full py-3 px-4 my-4 mx-0 bg-primary-500 text-white border-none rounded cursor-pointer text-base font-bold transition-colors duration-200 ease-in-out hover:bg-primary-600 disabled:bg-gray-400 disabled:text-gray-500 disabled:cursor-not-allowed"
+        >
+          End Session Early
+        </button>
 
         {/* Debug button for testing distractions */}
         {/* {onTriggerDistraction && (
@@ -181,23 +195,27 @@ export const BattleScreen = ({
 
       {/* Confirmation Modal */}
       {showEndModal && (
-        <div
-          className="modal"
-          style={{ display: "flex" }}
-        >
-          <div className="modal-content">
-            <h2>❗ End Session Early?</h2>
-            <p>
+        <div className="fixed top-0 left-0 right-0 bottom-0 bg-black bg-opacity-35 flex items-center justify-center z-50">
+          <div className="bg-white py-7 px-6 pb-5 rounded-lg shadow-modal max-w-80 w-full text-center">
+            <h2 className="mt-0 text-danger-500 text-xl">
+              ❗ End Session Early?
+            </h2>
+            <p className="my-4 mx-0 text-gray-800 text-base">
               Leaving early means you won't defeat the monster and won't earn
               any XP.
               <br />
               Are you sure you want to stop now?
             </p>
-            <div className="modal-buttons">
-              <button onClick={handleCancelEndSession}>Keep Fighting</button>
+            <div className="flex justify-between gap-3">
+              <button
+                onClick={handleCancelEndSession}
+                className="flex-1 py-2 px-0 text-base rounded border-none cursor-pointer font-bold bg-gray-200 text-gray-800"
+              >
+                Keep Fighting
+              </button>
               <button
                 onClick={handleConfirmEndSession}
-                className="danger"
+                className="flex-1 py-2 px-0 text-base rounded border-none cursor-pointer font-bold bg-danger-500 text-white"
               >
                 Yes, End Session
               </button>

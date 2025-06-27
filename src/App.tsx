@@ -113,9 +113,9 @@ function App() {
 
   if (isLoading) {
     return (
-      <div id="app">
-        <div style={{ textAlign: "center", padding: "50px" }}>
-          Loading ChronoFocus...
+      <div className="font-sans w-96 min-h-[500px] p-0 m-0 bg-primary-50 text-gray-800">
+        <div className="p-4 bg-white min-h-[calc(100vh-2rem)] box-border">
+          <div className="text-center py-12">Loading ChronoFocus...</div>
         </div>
       </div>
     )
@@ -123,9 +123,11 @@ function App() {
 
   if (!userStats || !xpConfig) {
     return (
-      <div id="app">
-        <div style={{ textAlign: "center", padding: "50px", color: "red" }}>
-          Error loading game data. Please refresh the page.
+      <div className="font-sans w-96 min-h-[500px] p-0 m-0 bg-primary-50 text-gray-800">
+        <div className="p-4 bg-white min-h-[calc(100vh-2rem)] box-border">
+          <div className="text-center py-12 text-red-500">
+            Error loading game data. Please refresh the page.
+          </div>
         </div>
       </div>
     )
@@ -140,38 +142,40 @@ function App() {
       : null
 
   return (
-    <div id="app">
-      {currentScreen === "hub" && (
-        <HubTown
-          userStats={userStats}
-          monsters={monsters}
-          xpConfig={xpConfig}
-          selectedMonsterId={selectedMonsterId}
-          onMonsterSelect={handleMonsterSelect}
-          onStartSession={handleStartSession}
-        />
-      )}
-
-      {currentScreen === "battle" && selectedMonster && battleSessionData && (
-        <BattleScreen
-          monster={selectedMonster}
-          sessionData={battleSessionData}
-          onEndSessionEarly={handleEndSessionEarly}
-          onTriggerDistraction={handleTriggerDistraction}
-        />
-      )}
-
-      {currentScreen === "result" &&
-        currentSession &&
-        typeof currentSession === "object" &&
-        "result" in currentSession && (
-          <ResultScreen
-            outcome={currentSession as SessionOutcome}
+    <div className="font-sans w-96 min-h-[500px] p-0 m-0 bg-primary-50 text-gray-800">
+      <div className="p-4 bg-white min-h-[calc(100vh-2rem)] box-border">
+        {currentScreen === "hub" && (
+          <HubTown
             userStats={userStats}
+            monsters={monsters}
             xpConfig={xpConfig}
-            onStartAnotherSession={handleStartAnotherSession}
+            selectedMonsterId={selectedMonsterId}
+            onMonsterSelect={handleMonsterSelect}
+            onStartSession={handleStartSession}
           />
         )}
+
+        {currentScreen === "battle" && selectedMonster && battleSessionData && (
+          <BattleScreen
+            monster={selectedMonster}
+            sessionData={battleSessionData}
+            onEndSessionEarly={handleEndSessionEarly}
+            onTriggerDistraction={handleTriggerDistraction}
+          />
+        )}
+
+        {currentScreen === "result" &&
+          currentSession &&
+          typeof currentSession === "object" &&
+          "result" in currentSession && (
+            <ResultScreen
+              outcome={currentSession as SessionOutcome}
+              userStats={userStats}
+              xpConfig={xpConfig}
+              onStartAnotherSession={handleStartAnotherSession}
+            />
+          )}
+      </div>
     </div>
   )
 }

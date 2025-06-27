@@ -31,21 +31,23 @@ export const ResultScreen = ({
 
     if (outcome.xpBreakdown) {
       return (
-        <div className="xp-breakdown">
-          <div className="base-xp">Base XP: {outcome.xpBreakdown.baseXP}</div>
+        <div className="text-center">
+          <div className="text-sm mb-2 text-gray-600">
+            Base XP: {outcome.xpBreakdown.baseXP}
+          </div>
           {outcome.xpBreakdown.bonuses.length > 0 && (
-            <div className="xp-bonuses">
+            <div className="my-2">
               {outcome.xpBreakdown.bonuses.map((bonus, index) => (
                 <div
                   key={index}
-                  className="xp-bonus"
+                  className="text-sm text-blue-500 my-1 font-medium"
                 >
                   {bonus.message}
                 </div>
               ))}
             </div>
           )}
-          <div className="total-xp">
+          <div className="text-lg mt-3 pt-2 border-t border-gray-300">
             <strong>Total XP Earned: {outcome.xpEarned}</strong>
           </div>
         </div>
@@ -56,47 +58,56 @@ export const ResultScreen = ({
   }
 
   return (
-    <div className="screen active">
-      <h2>{resultMessage}</h2>
+    <div className="block">
+      <h2 className="text-gray-700 text-center text-2xl font-semibold mt-0 mb-5">
+        {resultMessage}
+      </h2>
       {outcome.monsterDefeatedName && outcome.result === "victory" && (
-        <p>You defeated {outcome.monsterDefeatedName}!</p>
+        <p className="text-center text-gray-700">
+          You defeated {outcome.monsterDefeatedName}!
+        </p>
       )}
 
-      <div className="xp-earned">{getXPMessage()}</div>
+      <div className="text-center text-2xl font-bold my-2 mb-5 text-success-600">
+        {getXPMessage()}
+      </div>
 
-      <div className="stats-display">
+      <div className="text-left text-base leading-relaxed bg-gray-50 p-4 rounded border border-gray-200">
         {outcome.pomodoroCompleted && (
-          <p>
-            <strong>Pomodoro Completed!</strong> ✅
+          <p className="my-2">
+            <strong className="text-gray-600">Pomodoro Completed!</strong> ✅
           </p>
         )}
         {outcome.totalPomodoros !== undefined && (
-          <p>
-            <strong>Total Pomodoros:</strong> {outcome.totalPomodoros}
+          <p className="my-2">
+            <strong className="text-gray-600">Total Pomodoros:</strong>{" "}
+            {outcome.totalPomodoros}
           </p>
         )}
         {outcome.currentXP !== undefined && (
-          <p>
-            <strong>Total XP:</strong> {outcome.currentXP} (Level {level})
+          <p className="my-2">
+            <strong className="text-gray-600">Total XP:</strong>{" "}
+            {outcome.currentXP} (Level {level})
           </p>
         )}
-        <p>
-          <strong>Title:</strong> {title}
+        <p className="my-2">
+          <strong className="text-gray-600">Title:</strong> {title}
         </p>
         {outcome.currentStreak !== undefined && (
-          <p>
-            <strong>Current Streak:</strong> {outcome.currentStreak}
+          <p className="my-2">
+            <strong className="text-gray-600">Current Streak:</strong>{" "}
+            {outcome.currentStreak}
           </p>
         )}
 
         {outcome.result === "abandoned" && (
-          <p>The monster lives to distract you another day.</p>
+          <p className="my-2">The monster lives to distract you another day.</p>
         )}
       </div>
 
       <button
         onClick={onStartAnotherSession}
-        style={{ marginTop: "20px" }}
+        className="block w-full py-3 px-4 mt-5 bg-primary-500 text-white border-none rounded cursor-pointer text-base font-bold transition-colors duration-200 ease-in-out hover:bg-primary-600 disabled:bg-gray-400 disabled:text-gray-500 disabled:cursor-not-allowed"
       >
         Return to Hub Town
       </button>

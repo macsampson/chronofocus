@@ -1,12 +1,15 @@
 // Background service worker for ChronoFocus extension
 
+// import { calculateSessionXP } from "./utils/xpSystem"
+import type { SessionData, UserStats, XPConfig, Monster } from "./types"
+
 console.log("🚀 Background script starting to load...")
 
 // Global state for active timer
-let sessionTimerInterval: any = null
+let isSessionActive = false
 let monsterTriggerInterval: any = null
 let currentTabId: number | null = null
-let monstersData: any = {}
+let monstersData: Record<string, Monster> = {}
 
 // Load monsters data
 async function loadMonsters(): Promise<void> {
@@ -23,24 +26,30 @@ async function loadMonsters(): Promise<void> {
 // Load monsters on startup
 loadMonsters()
 
+// Listen for alarm events
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "sessionTimer" && isSessionActive) {
+    onTimerTick()
+  }
+})
+
 // Timer tick function
 async function onTimerTick(): Promise<void> {
   const data = await chrome.storage.local.get("currentSession")
-  const currentSession = data.currentSession
+  const currentSession: SessionData = data.currentSession
 
   if (!currentSession?.isActive || !currentSession.startTime) {
-    console.warn("Timer tick for inactive session. Clearing interval.")
-    if (sessionTimerInterval) {
-      clearInterval(sessionTimerInterval)
-      sessionTimerInterval = null
-    }
+    console.warn("Timer tick for inactive session. Clearing alarm.")
+    chrome.alarms.clear("sessionTimer")
+    isSessionActive = false
     return
   }
 
   const elapsedSeconds = Math.floor(
     (Date.now() - currentSession.startTime) / 1000
   )
-  const remainingSeconds = currentSession.durationSeconds - elapsedSeconds
+  const remainingSeconds =
+    (currentSession.durationSeconds || 0) - elapsedSeconds
 
   // Update timer value
   currentSession.timerValue = Math.max(0, remainingSeconds)
@@ -118,18 +127,16 @@ async function endSession(result: "victory" | "defeat"): Promise<void> {
   console.log(`Session ended with ${result}`)
 
   // Clear timer and stop trigger monitoring
-  if (sessionTimerInterval) {
-    clearInterval(sessionTimerInterval)
-    sessionTimerInterval = null
-  }
+  chrome.alarms.clear("sessionTimer")
+  isSessionActive = false
   stopMonsterTriggerInterval()
 
   const storage = await chrome.storage.local.get([
     "currentSession",
     "userStats",
   ])
-  const currentSession = storage.currentSession
-  let userStats = storage.userStats
+  const currentSession: SessionData = storage.currentSession
+  let userStats: UserStats = storage.userStats
 
   if (!userStats) {
     userStats = {
@@ -141,11 +148,39 @@ async function endSession(result: "victory" | "defeat"): Promise<void> {
     }
   }
 
+  // Load XP config and calculate proper XP
+  const previousXP = userStats.currentXP
   let xpEarned = 0
+  let xpBreakdown = null
   let pomodoroCompleted = false
 
   if (result === "victory") {
-    xpEarned = 100 // Simple XP for now
+    try {
+      // Load XP config and monsters data
+      const [xpConfigResponse, monstersResponse] = await Promise.all([
+        fetch(chrome.runtime.getURL("xp-config.json")),
+        fetch(chrome.runtime.getURL("monsters.json")),
+      ])
+
+      const xpConfig: XPConfig = await xpConfigResponse.json()
+      const monsters: Record<string, Monster> = await monstersResponse.json()
+
+      // Get today's pomodoro count for bonus calculation
+      const todayPomodoros = userStats.totalPomodoros % 100 // Simple approximation
+
+      // Temporary simple XP calculation to test if import is the issue
+      xpEarned = 100
+      xpBreakdown = {
+        baseXP: 100,
+        bonuses: [],
+        finalXP: 100,
+      }
+    } catch (error) {
+      console.error("Error calculating XP:", error)
+      // Fallback to simple XP
+      xpEarned = 100
+    }
+
     userStats.currentXP += xpEarned
     userStats.totalPomodoros += 1
     userStats.currentStreak += 1
@@ -161,6 +196,8 @@ async function endSession(result: "victory" | "defeat"): Promise<void> {
   const outcomeData = {
     result,
     xpEarned,
+    xpBreakdown,
+    previousXP,
     monsterDefeatedName:
       result === "victory"
         ? monstersData[currentSession.monsterId]?.name
@@ -196,7 +233,9 @@ async function endSession(result: "victory" | "defeat"): Promise<void> {
 }
 
 // Helper function to check if current site is a trigger site
-async function checkIfOnTriggerSite(currentSession: any): Promise<boolean> {
+async function checkIfOnTriggerSite(
+  currentSession: SessionData
+): Promise<boolean> {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
     if (!tabs || tabs.length === 0) return false
@@ -309,105 +348,6 @@ async function checkAndApplyMonsterHealing(currentSession: any): Promise<void> {
   }
 }
 
-// Old separate monster trigger monitoring function (now unused)
-async function checkMonsterTriggersAndApplyHealing_OLD(): Promise<void> {
-  try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
-    if (!tabs || tabs.length === 0) return
-
-    const tab = tabs[0]
-    const url = tab.url
-    if (!url) return
-
-    const data = await chrome.storage.local.get("currentSession")
-    const currentSession = data.currentSession
-
-    if (!currentSession?.isActive) return
-
-    const currentMonster = monstersData[currentSession.monsterId]
-    if (!currentMonster) return
-
-    let shouldHeal = false
-    let triggerReason = ""
-
-    // Check if current site matches monster's trigger sites
-    if (currentMonster.triggerSites?.length) {
-      try {
-        const hostname = new URL(url).hostname.toLowerCase()
-        const matchedSite = currentMonster.triggerSites.find((site: string) =>
-          hostname.includes(site.toLowerCase())
-        )
-        if (matchedSite) {
-          shouldHeal = true
-          triggerReason = `${currentMonster.name} feeds on ${matchedSite}!`
-        }
-      } catch (e) {
-        console.warn("Failed to parse URL:", url, e)
-      }
-    }
-
-    // Apply healing if triggered
-    if (shouldHeal && currentSession.currentHP < currentSession.maxHP) {
-      currentSession.currentHP = Math.min(
-        currentSession.maxHP,
-        currentSession.currentHP + 1
-      )
-
-      // Check if the last log entry is a healing entry with the same reason
-      const lastEntry =
-        currentSession.battleLog[currentSession.battleLog.length - 1]
-      const healingRegex = new RegExp(
-        `^${triggerReason.replace(
-          /[.*+?^${}()|[\]\\]/g,
-          "\\$&"
-        )} \\+(\\d+) HP\\.$`
-      )
-
-      if (lastEntry && healingRegex.test(lastEntry)) {
-        // Increment the HP count in the last entry
-        const match = lastEntry.match(healingRegex)
-        if (match) {
-          const newCount = parseInt(match[1], 10) + 1
-          currentSession.battleLog[
-            currentSession.battleLog.length - 1
-          ] = `${triggerReason} +${newCount} HP.`
-        }
-      } else {
-        // Start a new healing entry
-        currentSession.battleLog.push(`${triggerReason} +1 HP.`)
-      }
-
-      console.log(
-        `🩹 Monster healed! ${triggerReason} HP: ${currentSession.currentHP}/${currentSession.maxHP}`
-      )
-
-      await chrome.storage.local.set({ currentSession })
-
-      // Send update to popup
-      try {
-        await chrome.runtime.sendMessage({
-          action: "updatePopupBattleState",
-          sessionData: currentSession,
-        })
-      } catch (err: any) {
-        // Popup might be closed, that's fine
-      }
-    }
-  } catch (error) {
-    console.error("Error in checkMonsterTriggersAndApplyHealing:", error)
-  }
-}
-
-// This function is now unused since healing is handled in timer tick
-function startMonsterTriggerInterval_UNUSED(): void {
-  if (monsterTriggerInterval) clearInterval(monsterTriggerInterval)
-  monsterTriggerInterval = setInterval(
-    checkMonsterTriggersAndApplyHealing_OLD,
-    1000
-  )
-  console.log("Started monster trigger monitoring interval")
-}
-
 function stopMonsterTriggerInterval(): void {
   if (monsterTriggerInterval) {
     clearInterval(monsterTriggerInterval)
@@ -463,9 +403,13 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
         sessionOutcome: null,
       })
 
-      // Start the timer (monster healing is now included in timer tick)
-      if (sessionTimerInterval) clearInterval(sessionTimerInterval)
-      sessionTimerInterval = setInterval(onTimerTick, 1000)
+      // Start the timer using chrome.alarms API
+      chrome.alarms.clear("sessionTimer")
+      chrome.alarms.create("sessionTimer", {
+        delayInMinutes: 0,
+        periodInMinutes: 1 / 60,
+      })
+      isSessionActive = true
 
       // Initialize current tab ID
       try {

@@ -40,12 +40,11 @@ export const getDefaultUserStats = (): UserStats => ({
   lastActiveDate: null,
 })
 
-export const loadUserStats = (): UserStats => {
+export const loadUserStats = async (): Promise<UserStats> => {
   try {
-    const stored = localStorage.getItem("userStats")
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      return { ...getDefaultUserStats(), ...parsed }
+    const result = await chrome.storage.local.get("userStats")
+    if (result.userStats) {
+      return { ...getDefaultUserStats(), ...result.userStats }
     }
   } catch (error) {
     console.error("Error loading user stats:", error)
@@ -53,32 +52,34 @@ export const loadUserStats = (): UserStats => {
   return getDefaultUserStats()
 }
 
-export const saveUserStats = (stats: UserStats): void => {
+export const saveUserStats = async (stats: UserStats): Promise<void> => {
   try {
-    localStorage.setItem("userStats", JSON.stringify(stats))
+    await chrome.storage.local.set({ userStats: stats })
   } catch (error) {
     console.error("Error saving user stats:", error)
   }
 }
 
-export const getTodayPomodoros = (): number => {
+export const getTodayPomodoros = async (): Promise<number> => {
   const today = new Date().toDateString()
   try {
-    const stored = localStorage.getItem(`pomodoros_${today}`)
-    return stored ? parseInt(stored, 10) : 0
+    const result = await chrome.storage.local.get(`pomodoros_${today}`)
+    return result[`pomodoros_${today}`]
+      ? parseInt(result[`pomodoros_${today}`], 10)
+      : 0
   } catch (error) {
     console.error("Error getting today pomodoros:", error)
     return 0
   }
 }
 
-export const updateTodayPomodoros = (): number => {
+export const updateTodayPomodoros = async (): Promise<number> => {
   const today = new Date().toDateString()
-  const current = getTodayPomodoros()
+  const current = await getTodayPomodoros()
   const newCount = current + 1
 
   try {
-    localStorage.setItem(`pomodoros_${today}`, newCount.toString())
+    await chrome.storage.local.set({ [`pomodoros_${today}`]: newCount })
   } catch (error) {
     console.error("Error updating today pomodoros:", error)
   }
@@ -86,11 +87,11 @@ export const updateTodayPomodoros = (): number => {
   return newCount
 }
 
-export const getRecentSessionHistory = (): SessionHistory[] => {
+export const getRecentSessionHistory = async (): Promise<SessionHistory[]> => {
   try {
-    const stored = localStorage.getItem("sessionHistory")
-    if (stored) {
-      const history = JSON.parse(stored)
+    const result = await chrome.storage.local.get("sessionHistory")
+    if (result.sessionHistory) {
+      const history = result.sessionHistory
       return Array.isArray(history) ? history.slice(-5) : []
     }
   } catch (error) {
@@ -99,9 +100,9 @@ export const getRecentSessionHistory = (): SessionHistory[] => {
   return []
 }
 
-export const addToSessionHistory = (success: boolean): void => {
+export const addToSessionHistory = async (success: boolean): Promise<void> => {
   try {
-    const history = getRecentSessionHistory()
+    const history = await getRecentSessionHistory()
     const newSession: SessionHistory = {
       success,
       date: new Date().toISOString(),
@@ -112,7 +113,7 @@ export const addToSessionHistory = (success: boolean): void => {
       history.shift()
     }
 
-    localStorage.setItem("sessionHistory", JSON.stringify(history))
+    await chrome.storage.local.set({ sessionHistory: history })
   } catch (error) {
     console.error("Error adding to session history:", error)
   }

@@ -101,7 +101,7 @@ export const useGameState = () => {
         setXPConfig(xpConfigData)
 
         // Load user stats
-        const stats = loadUserStats()
+        const stats = await loadUserStats()
         setUserStats(stats)
       } catch (error) {
         console.error("Error loading game data:", error)
@@ -114,9 +114,9 @@ export const useGameState = () => {
   }, [])
 
   // Update user stats
-  const updateUserStats = useCallback((newStats: UserStats) => {
+  const updateUserStats = useCallback(async (newStats: UserStats) => {
     setUserStats(newStats)
-    saveUserStats(newStats)
+    await saveUserStats(newStats)
   }, [])
 
   // Get user level and title

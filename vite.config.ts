@@ -15,7 +15,6 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "popup.html"),
         background: resolve(__dirname, "src/background.ts"),
-        content: resolve(__dirname, "src/content.ts"),
       },
       output: {
         entryFileNames: (chunkInfo) => {
