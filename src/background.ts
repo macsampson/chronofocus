@@ -1,9 +1,141 @@
 // Background service worker for ChronoFocus extension
 
-// import { calculateSessionXP } from "./utils/xpSystem"
-import type { SessionData, UserStats, XPConfig, Monster } from "./types"
+import type {
+  SessionData,
+  UserStats,
+  XPConfig,
+  Monster,
+  XPBreakdown,
+} from "./types"
 
 console.log("🚀 Background script starting to load...")
+
+// Inline XP calculation functions for service worker compatibility
+const calculateStreakMultiplier = (
+  streakDays: number,
+  xpConfig: XPConfig
+): number => {
+  if (!xpConfig?.streakMultiplier) return xpConfig.defaults.streakMultiplier
+  const multiplier = 1 + streakDays * xpConfig.streakMultiplier.perDay
+  return Math.min(multiplier, xpConfig.streakMultiplier.maxMultiplier)
+}
+
+const generateFocusCrit = (xpConfig: XPConfig): number => {
+  if (!xpConfig?.modifiers) return xpConfig.defaults.focusCrit
+  const min = xpConfig.modifiers.minFocusCrit
+  const max = xpConfig.modifiers.maxFocusCrit
+  return Math.random() * (max - min) + min
+}
+
+const calculateMonsterBaseXP = (
+  monsterId: string,
+  monsters: Record<string, Monster>,
+  xpConfig: XPConfig
+): number => {
+  if (!xpConfig?.base || !monsters) return xpConfig.defaults.baseXP
+
+  const monster = monsters[monsterId]
+  if (!monster) return xpConfig.base.xpPerSession
+
+  let baseXP = monster.hp * xpConfig.base.xpPerHP
+
+  if (xpConfig.difficultyMultipliers?.[monsterId]) {
+    baseXP *= xpConfig.difficultyMultipliers[monsterId]
+  }
+
+  baseXP = Math.max(baseXP, xpConfig.base.minXP)
+  return Math.floor(baseXP)
+}
+
+const calculateSessionXP = (
+  sessionData: SessionData,
+  userStats: UserStats,
+  monsters: Record<string, Monster>,
+  xpConfig: XPConfig,
+  todayPomodoros: number
+): XPBreakdown => {
+  if (!xpConfig?.base || !xpConfig?.modifiers) {
+    return {
+      finalXP: xpConfig.defaults.sessionXP,
+      bonuses: [],
+      baseXP: xpConfig.defaults.baseXP,
+    }
+  }
+
+  let baseXP = calculateMonsterBaseXP(sessionData.monsterId, monsters, xpConfig)
+  const bonuses: Array<{ type: string; amount: number; message: string }> = []
+
+  // Check for no distractions
+  const hadDistractions = sessionData.battleLog?.some(
+    (log) => log.includes("healed") || log.includes("Distracted")
+  )
+
+  if (!hadDistractions) {
+    const bonus = Math.floor(baseXP * xpConfig.modifiers.noDistractions)
+    baseXP += bonus
+    bonuses.push({
+      type: "noDistractions",
+      amount: bonus,
+      message: xpConfig.feedback.noDistractions.replace(
+        "{bonus}",
+        bonus.toString()
+      ),
+    })
+  }
+
+  // Check for second session of the day
+  if (todayPomodoros === 1) {
+    const bonus = Math.floor(baseXP * xpConfig.modifiers.secondSession)
+    baseXP += bonus
+    bonuses.push({
+      type: "secondSession",
+      amount: bonus,
+      message: xpConfig.feedback.secondSession.replace(
+        "{bonus}",
+        bonus.toString()
+      ),
+    })
+  }
+
+  // Apply streak bonus
+  if (userStats.currentStreak > 0) {
+    const streakMultiplier = calculateStreakMultiplier(
+      userStats.currentStreak,
+      xpConfig
+    )
+    const bonus = Math.floor(baseXP * (streakMultiplier - 1))
+    baseXP += bonus
+    bonuses.push({
+      type: "streakBonus",
+      amount: bonus,
+      message: xpConfig.feedback.streakBonus
+        .replace("{streak}", userStats.currentStreak.toString())
+        .replace("{bonus}", bonus.toString()),
+    })
+  }
+
+  // Apply focus crit
+  const critMultiplier = generateFocusCrit(xpConfig)
+  if (critMultiplier > 1) {
+    const originalXP = baseXP
+    baseXP = Math.floor(baseXP * critMultiplier)
+    const bonus = baseXP - originalXP
+    bonuses.push({
+      type: "focusCrit",
+      amount: bonus,
+      message: xpConfig.feedback.focusCrit.replace(
+        "{multiplier}",
+        critMultiplier.toFixed(2)
+      ),
+    })
+  }
+
+  return {
+    finalXP: baseXP,
+    bonuses,
+    baseXP: calculateMonsterBaseXP(sessionData.monsterId, monsters, xpConfig),
+  }
+}
 
 // Global state for active timer
 let isSessionActive = false
@@ -122,6 +254,70 @@ async function onTimerTick(): Promise<void> {
   }
 }
 
+// Show completion notification with sound
+async function showCompletionNotification(outcomeData: any): Promise<void> {
+  try {
+    // Create visual notification
+    const monsterName = outcomeData.monsterDefeatedName || "Monster"
+    const xpGained = outcomeData.xpEarned || 0
+    const totalPomodoros = outcomeData.totalPomodoros || 0
+
+    await chrome.notifications.create("pomodoro-complete", {
+      type: "basic",
+      iconUrl: "assets/icon48.png",
+      title: "🎉 Pomodoro Complete!",
+      message: `Defeated ${monsterName}! +${xpGained} XP earned. Total sessions: ${totalPomodoros}`,
+      priority: 2,
+    })
+
+    // Play notification sound
+    await playNotificationSound()
+
+    console.log("✅ Completion notification shown and sound played")
+  } catch (error) {
+    console.error("Error showing completion notification:", error)
+  }
+}
+
+// Play notification sound
+async function playNotificationSound(): Promise<void> {
+  try {
+    // Create an audio element and play the notification sound
+    const audio = new Audio(
+      chrome.runtime.getURL("assets/notification-sound.mp3")
+    )
+    audio.volume = 0.5 // Set to moderate volume
+    await audio.play()
+    console.log("🔊 Notification sound played")
+  } catch (error) {
+    console.error("Error playing notification sound:", error)
+    // Fallback: try to play a system notification sound
+    try {
+      // Create a very short beep using Web Audio API
+      const audioContext = new AudioContext()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime)
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.01,
+        audioContext.currentTime + 0.5
+      )
+
+      oscillator.start()
+      oscillator.stop(audioContext.currentTime + 0.5)
+
+      console.log("🔊 Fallback beep sound played")
+    } catch (fallbackError) {
+      console.error("Could not play any notification sound:", fallbackError)
+    }
+  }
+}
+
 // End session function
 async function endSession(result: "victory" | "defeat"): Promise<void> {
   console.log(`Session ended with ${result}`)
@@ -168,13 +364,16 @@ async function endSession(result: "victory" | "defeat"): Promise<void> {
       // Get today's pomodoro count for bonus calculation
       const todayPomodoros = userStats.totalPomodoros % 100 // Simple approximation
 
-      // Temporary simple XP calculation to test if import is the issue
-      xpEarned = 100
-      xpBreakdown = {
-        baseXP: 100,
-        bonuses: [],
-        finalXP: 100,
-      }
+      // Use the inlined modular XP calculation function
+      const xpBreakdownResult = calculateSessionXP(
+        currentSession,
+        userStats,
+        monsters,
+        xpConfig,
+        todayPomodoros
+      )
+      xpEarned = xpBreakdownResult.finalXP
+      xpBreakdown = xpBreakdownResult
     } catch (error) {
       console.error("Error calculating XP:", error)
       // Fallback to simple XP
@@ -183,8 +382,30 @@ async function endSession(result: "victory" | "defeat"): Promise<void> {
 
     userStats.currentXP += xpEarned
     userStats.totalPomodoros += 1
-    userStats.currentStreak += 1
     pomodoroCompleted = true
+
+    // Handle streak logic based on consecutive days
+    const today = new Date().toISOString().split("T")[0] // Get date as YYYY-MM-DD
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0]
+
+    if (!userStats.lastActiveDate) {
+      // First ever pomodoro
+      userStats.currentStreak = 1
+      userStats.lastActiveDate = today
+    } else if (userStats.lastActiveDate === today) {
+      // Already completed a pomodoro today, don't change streak
+      // Streak stays the same
+    } else if (userStats.lastActiveDate === yesterday) {
+      // Completed yesterday, increment streak
+      userStats.currentStreak += 1
+      userStats.lastActiveDate = today
+    } else {
+      // Missed one or more days, reset streak to 1
+      userStats.currentStreak = 1
+      userStats.lastActiveDate = today
+    }
 
     if (userStats.monstersDefeated[currentSession.monsterId] !== undefined) {
       userStats.monstersDefeated[currentSession.monsterId]++
@@ -215,6 +436,11 @@ async function endSession(result: "victory" | "defeat"): Promise<void> {
     userStats,
     sessionOutcome: outcomeData,
   })
+
+  // Show notification and play sound for successful completion
+  if (result === "victory") {
+    await showCompletionNotification(outcomeData)
+  }
 
   // Notify popup
   try {

@@ -3,7 +3,14 @@
   "name": "ChronoFocus",
   "version": "0.1.0",
   "description": "Gamify your Pomodoro sessions by battling distraction monsters!",
-  "permissions": ["storage", "tabs", "scripting", "webNavigation", "alarms"],
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "webNavigation",
+    "alarms",
+    "notifications"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -23,7 +30,11 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["monsters.json", "xp-config.json"],
+      "resources": [
+        "monsters.json",
+        "xp-config.json",
+        "assets/notification-sound.mp3"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

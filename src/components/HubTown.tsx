@@ -10,6 +10,7 @@ import {
   getUserTitle,
   calculateXPForCurrentLevel,
   calculateXPForNextLevel,
+  calculateMonsterBaseXP,
 } from "../utils/xpSystem"
 
 interface HubTownProps {
@@ -78,7 +79,7 @@ export const HubTown = ({
             </div>
           </div>
           <div className="flex-grow">
-            <h3 className="m-0 mb-1 text-white text-xl text-left">
+            <h3 className="m-0 mb-1 text-white text-xl text-left font-bold">
               Focus Warrior
             </h3>
             <div className="text-sm text-white text-opacity-80 mb-2 italic">
@@ -92,7 +93,7 @@ export const HubTown = ({
                     style={{ width: `${xpPercentage}%` }}
                   ></div>
                 </div>
-                <span className="block text-center text-sm font-bold text-white text-shadow mt-1">
+                <span className="block text-center text-sm text-white text-shadow mt-1">
                   {currentLevelXP} / {nextLevelXP} XP
                 </span>
               </div>
@@ -121,13 +122,18 @@ export const HubTown = ({
 
       {/* Monster Selection Section */}
       <div className="mb-5">
-        <h2 className="text-gray-700 text-center mb-4 text-xl font-semibold">
+        <h2 className="text-gray-700 text-center mb-4 text-lg font-semibold">
           Choose Your Distraction to Battle
         </h2>
         <div className="grid grid-cols-1 gap-3 mb-4">
           {Object.values(monsters).map((monster) => {
             const durationMinutes = Math.round(monster.hp / 60)
             const isSelected = selectedMonsterId === monster.id
+            const potentialXP = calculateMonsterBaseXP(
+              monster.id,
+              monsters,
+              xpConfig
+            )
 
             return (
               <div
@@ -156,6 +162,9 @@ export const HubTown = ({
                   </small>
                   <small className="text-gray-500 mt-1 block">
                     Duration: {durationMinutes} min
+                  </small>
+                  <small className="text-blue-600 font-semibold mt-1 block">
+                    💰 Base XP: {potentialXP}
                   </small>
                 </div>
               </div>
