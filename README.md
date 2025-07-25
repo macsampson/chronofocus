@@ -1,169 +1,233 @@
-# ChronoFocus - React TypeScript Edition
+# ChronoFocus
 
-A gamified Pomodoro timer where you battle distraction monsters to improve your focus! This is a React + TypeScript conversion of the original HTML/JS Chrome extension.
+A gamified Pomodoro timer Chrome extension where you battle distraction monsters to improve your focus! Turn your productivity sessions into epic battles against different types of distractions.
 
-## Features
+## 🎮 What is ChronoFocus?
 
-🎮 **Gamified Pomodoro Sessions**
+ChronoFocus transforms the traditional Pomodoro technique into an engaging RPG-style experience. Instead of just running a timer, you're battling personalized distraction monsters that represent your specific productivity challenges. Each monster heals when you visit their trigger websites or perform distracting actions, making your focus sessions feel like real battles.
 
-- Choose from different distraction monsters to battle
-- Each monster represents different types of distractions
-- Timer duration based on monster HP (5 seconds to 30 minutes)
+## ✨ Features
 
-⚔️ **Battle System**
-
-- Real-time HP bars for monsters
-- Battle log showing your progress
-- Distraction events can heal monsters (simulated)
-
-🏆 **Progression System**
-
-- Earn XP for completed sessions
-- Level up and gain titles
-- Daily streak bonuses
-- Session history tracking
-
-🎯 **Monsters Available**
-
-- **Test Gremlin**: Quick 5-second sessions for testing
-- **Doomscoller**: 25-minute battles against social media distractions
-- **Tubewyrm**: 20-minute fights against video streaming urges
+### 🗡️ Monster Battle System
+- **Test Gremlin**: 5-second training sessions for testing
+- **Doomscoller**: 25-minute battles against social media distractions (Facebook, Instagram, X, TikTok, etc.)
+- **Tubewyrm**: 20-minute fights against video streaming urges (YouTube, Netflix, Twitch, etc.)
 - **Tabberwock**: 30-minute wars against tab-switching chaos
 
-## Technology Stack
+### 📈 XP & Progression System
+- **Base XP**: 100 XP per completed session
+- **Bonus Multipliers**:
+  - +10% for perfect focus (no distractions)
+  - +10% for second+ sessions in a day
+  - +20% for streaks > 3 days
+  - 5-25% random "Focus Crit" multiplier
+- **Level System**: Progressive XP requirements (Level 1: 1000 XP, Level 2: 2828 XP, etc.)
+- **Titles**: Rank progression from "Distractling" to "Flowmaster"
 
-- **React 18** - Modern React with hooks
-- **TypeScript** - Type-safe development
-- **Vite** - Fast development and build tool
-- **CSS** - Custom styling (converted from original)
-- **LocalStorage** - Data persistence
+### 🎯 Real-Time Battle Mechanics
+- Monster HP decreases as you stay focused
+- Monsters heal when you visit their trigger sites
+- Battle log tracks your distraction events
+- Visual feedback with animations and effects
 
-## Getting Started
+### 🏆 Statistics & Tracking
+- Daily session counts and streaks
+- Session history with detailed outcomes
+- Monster defeat counters
+- Total XP and level progression
+
+## 🚀 Getting Started
 
 ### Prerequisites
+- **Node.js** v16 or higher
+- **Bun** (recommended) or npm/yarn
+- **Google Chrome** browser
 
-- Node.js (v16 or higher)
-- npm or yarn
+### Installation & Development
 
-### Installation
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/chronofocus.git
+   cd chronofocus
+   ```
 
-1. Clone the repository:
+2. **Install dependencies**:
+   ```bash
+   bun install
+   # or
+   npm install
+   ```
+
+3. **Start development server**:
+   ```bash
+   bun run dev
+   # or
+   npm run dev
+   ```
+
+4. **Build for production**:
+   ```bash
+   bun run build
+   # or
+   npm run build
+   ```
+
+### Chrome Extension Installation
+
+1. Build the project (`bun run build`)
+2. Open Chrome and navigate to `chrome://extensions/`
+3. Enable "Developer mode" in the top right
+4. Click "Load unpacked" and select the `dist` folder
+5. The ChronoFocus icon should appear in your extensions toolbar
+
+## 🛠️ Technology Stack
+
+- **Frontend**: React 18 + TypeScript
+- **Styling**: Tailwind CSS with custom animations
+- **Build Tool**: Vite
+- **Extension APIs**: Chrome Extensions Manifest V3
+- **Storage**: Chrome Local Storage
+- **Architecture**: Component-based with custom hooks
+
+## 📁 Project Structure
+
+```
+chronofocus/
+├── public/
+│   ├── assets/           # Monster icons and sounds
+│   ├── manifest.json     # Chrome extension manifest
+│   ├── monsters.json     # Monster configurations
+│   └── xp-config.json    # XP system settings
+├── src/
+│   ├── components/       # React components
+│   │   ├── HubTown.tsx      # Main dashboard
+│   │   ├── BattleScreen.tsx # Pomodoro timer interface
+│   │   └── ResultScreen.tsx # Session results
+│   ├── hooks/           # Custom React hooks
+│   │   └── useGameState.ts  # Global state management
+│   ├── types/           # TypeScript definitions
+│   ├── utils/           # Utility functions
+│   │   ├── storage.ts      # Chrome storage operations
+│   │   └── xpSystem.ts     # XP calculations
+│   ├── App.tsx          # Main app component
+│   ├── background.ts    # Chrome extension background script
+│   └── index.css        # Tailwind styles
+├── popup.html           # Extension popup HTML
+└── popup.tsx            # Extension popup entry point
+```
+
+## 🎮 How to Play
+
+1. **Choose Your Battle**: Select a monster that represents your main distraction type
+2. **Start the Session**: Click "Battle" to begin your Pomodoro session
+3. **Stay Focused**: Avoid visiting the monster's trigger sites during the session
+4. **Watch the Battle**: See the monster's HP decrease as you maintain focus
+5. **Complete & Level Up**: Finish the session to earn XP and level up your focus skills
+
+## ⚙️ Configuration
+
+### Monster Customization
+Edit `public/monsters.json` to modify monster stats, trigger sites, or add new monsters:
+
+```json
+{
+  "newmonster": {
+    "id": "newmonster",
+    "name": "New Monster",
+    "icon": "assets/newmonster.png",
+    "description": "A custom distraction monster",
+    "hp": 1500,
+    "triggerSites": ["example.com", "distraction.com"]
+  }
+}
+```
+
+### XP System Tuning
+Modify `public/xp-config.json` to adjust progression rates, bonuses, and level requirements:
+
+```json
+{
+  "base": {
+    "xpPerSession": 100,
+    "xpPerHP": 0.1
+  },
+  "modifiers": {
+    "noDistractions": 0.1,
+    "streakBonus": 0.2
+  }
+}
+```
+
+## 🚧 Planned Features
+
+### Short-term Roadmap
+- [ ] **Custom Session Durations**: Allow manual timer settings beyond monster HP
+- [ ] **Distraction Blocking**: Optional website blocking during sessions
+- [ ] **Sound Settings**: Customizable notification sounds and volume control
+- [ ] **Theme Options**: Dark mode and alternative color schemes
+- [ ] **Session Notes**: Add personal notes to completed sessions
+
+### Medium-term Features
+- [ ] **Achievement System**: Unlock badges for specific milestones
+- [ ] **Weekly Challenges**: Special objectives with bonus rewards
+- [ ] **Custom Monsters**: User-created monsters with personalized triggers
+- [ ] **Export Data**: CSV export of session history and statistics
+- [ ] **Sync Across Devices**: Cloud sync for multi-device usage
+
+### Long-term Vision
+- [ ] **Social Features**: Leaderboards and friend challenges
+- [ ] **Advanced Analytics**: Detailed productivity insights and trends
+- [ ] **Integration APIs**: Connect with other productivity tools
+- [ ] **Mobile Companion**: Standalone mobile app version
+- [ ] **Team Battles**: Collaborative focus sessions for teams
+
+## 🔧 Development Scripts
 
 ```bash
-git clone <your-repo-url>
-cd chronofocus
+# Development
+bun run dev          # Start dev server with hot reload
+bun run build:watch  # Build with file watching
+
+# Production
+bun run build        # Build for production
+bun run preview      # Preview production build
+
+# Code Quality
+bun run lint         # Run ESLint
+bun run lint:fix     # Fix auto-fixable lint issues
+bun run type-check   # TypeScript type checking
 ```
 
-2. Install dependencies:
-
-```bash
-npm install
-```
-
-3. Start the development server:
-
-```bash
-npm run dev
-```
-
-4. Open your browser and navigate to `http://localhost:3000`
-
-### Building for Production
-
-```bash
-npm run build
-```
-
-The built files will be in the `dist` directory.
-
-## Project Structure
-
-```
-src/
-├── components/           # React components
-│   ├── HubTown.tsx      # Main dashboard/monster selection
-│   ├── BattleScreen.tsx # Pomodoro timer interface
-│   └── ResultScreen.tsx # Session results
-├── hooks/               # Custom React hooks
-│   ├── useGameState.ts  # Global game state management
-│   └── useTimer.ts      # Pomodoro timer logic
-├── types/               # TypeScript type definitions
-│   └── index.ts         # All interfaces and types
-├── utils/               # Utility functions
-│   ├── xpSystem.ts      # XP calculations and game mechanics
-│   └── storage.ts       # LocalStorage operations
-├── App.tsx              # Main app component
-├── main.tsx             # App entry point
-└── style.css            # Global styles
-```
-
-## Key Features Converted
-
-### From Original Extension
-
-- ✅ All XP system calculations
-- ✅ Monster data and configurations
-- ✅ Session tracking and history
-- ✅ Level progression and titles
-- ✅ Streak system
-- ✅ Complete UI/UX design
-
-### New React Features
-
-- ✅ Component-based architecture
-- ✅ TypeScript type safety
-- ✅ Custom hooks for state management
-- ✅ Modern React patterns
-- ✅ Responsive design
-- ✅ Error handling
-
-## Data Storage
-
-The app uses browser LocalStorage to persist:
-
-- User statistics (XP, level, pomodoros completed)
-- Session history (last 5 sessions)
-- Daily pomodoro counts
-- Monster defeat counts
-
-## Configuration
-
-Game balance and mechanics are configurable via:
-
-- `public/xp-config.json` - XP rates, bonuses, level curves
-- `public/monsters.json` - Monster stats and descriptions
-
-## Differences from Original
-
-This React version focuses on the core Pomodoro gameplay and removes browser extension specific features:
-
-- ❌ Website blocking functionality
-- ❌ Background service worker
-- ❌ Browser tab monitoring
-- ❌ Chrome extension APIs
-
-## Development Scripts
-
-```bash
-npm run dev        # Start development server
-npm run build      # Build for production
-npm run preview    # Preview production build
-npm run lint       # Run ESLint
-npm run lint:fix   # Fix ESLint issues
-```
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes with proper TypeScript types
-4. Test thoroughly
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## License
+### Development Guidelines
+- Use TypeScript for all new code
+- Follow the existing component structure
+- Add proper error handling for Chrome extension APIs
+- Test thoroughly in both development and extension modes
+- Maintain backward compatibility with existing save data
 
-MIT License - Feel free to use this project for learning or building your own focus apps!
+## 📝 License
 
-## Original Extension
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-This is based on the ChronoFocus browser extension. The original extension includes website blocking and browser integration features that are not present in this standalone web version.
+## 🎯 Why ChronoFocus?
+
+Traditional Pomodoro timers can feel monotonous and fail to address the psychological aspects of distraction. ChronoFocus gamifies the experience by:
+
+- **Personalizing the Challenge**: Different monsters for different distraction types
+- **Providing Immediate Feedback**: Real-time battle mechanics show the impact of distractions
+- **Creating Long-term Motivation**: XP progression and leveling systems encourage consistency
+- **Making Focus Fun**: RPG elements transform productivity into an engaging game
+
+Transform your focus sessions from a chore into an adventure with ChronoFocus!
+
+---
+
+**Happy Focusing! 🎮⚔️**
